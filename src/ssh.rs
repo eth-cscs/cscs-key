@@ -7,7 +7,7 @@ use std::time::SystemTime;
 use std::path::PathBuf;
 use reqwest;
 use serde::{Serialize, Deserialize, Deserializer};
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, bail, Context};
 use log::{info, debug};
 
 use crate::config::Config;
@@ -110,12 +110,17 @@ fn download_key_oidc(config: &Config) -> anyhow::Result<()> {
     let access_token = get_access_token(&config)?;
     println!("got token: {}", access_token);
 
-    let client = reqwest::blocking::Client::new();
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .context("Failed to initialize HTTP client.")?;
 
     let response = client.post(config.env.keys_url.clone())
         .bearer_auth(&access_token)
         .json(&key_duration)
-        .send()?;
+        .send()
+        .context("Failed to send request to the ssh service.")?;
 
     if !response.status().is_success() {
         let error_response_struct: SshserviceErrorResponse = response.json()?;
@@ -180,12 +185,17 @@ fn sign_key_oidc(config: &Config) -> anyhow::Result<()> {
 
     let access_token = get_access_token(&config)?;
 
-    let client = reqwest::blocking::Client::new();
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .context("Failed to initialize HTTP client.")?;
 
     let response = client.post(config.env.sign_url.clone())
         .bearer_auth(&access_token)
         .json(&public_key)
-        .send()?;
+        .send()
+        .context("Failed to send request to the ssh service.")?;
 
     if !response.status().is_success() {
         let error_response_struct: SshserviceErrorResponse = response.json()?;
