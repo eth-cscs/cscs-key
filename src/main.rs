@@ -1,10 +1,7 @@
 use clap::Parser;
-use directories::ProjectDirs;
 use std::io::Write;
-use anyhow::Context;
-use figment::{Figment, providers::{Format, Toml, Serialized}};
 
-use crate::config::{Config, ConfigCliOverride};
+use crate::config::{ConfigCliOverride, Environment};
 
 mod config;
 mod state;
@@ -18,6 +15,8 @@ struct Cli {
     verbose: bool,
     #[command(subcommand)]
     command: ssh::Commands,
+    #[arg(long, global = true, value_enum, hide = true)]
+    pub env: Option<Environment>,
     #[command(flatten)]
     pub config_overrides: ConfigCliOverride,
 }
@@ -31,17 +30,7 @@ fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
-    let proj_dirs = ProjectDirs::from("ch", "cscs", "cscs-key")
-        .context("Could not determine configuration directory")?;
-    let config_dir = proj_dirs.config_dir();
-    let config_file_path = config_dir.join("config.toml");
-
-    //let config = config::Config::load()?;
-    let config: Config = Figment::new()
-        .merge(Serialized::defaults(Config::default()))
-        .merge(Toml::file(config_file_path))
-        .merge(Serialized::defaults(&cli.config_overrides))
-        .extract()?;
+    let config = config::Config::load(cli.env, &cli.config_overrides)?;
 
     if cli.verbose {
         println!("Verbose output ...");

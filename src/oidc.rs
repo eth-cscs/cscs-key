@@ -78,12 +78,12 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<String> {
 
 fn refresh_access_token(config: &Config, refresh_token: &str) -> anyhow::Result<TokenStore> {
     let http_client = reqwest::blocking::Client::new();
-    let issuer_url = IssuerUrl::new(config.issuer_url.clone())?;
+    let issuer_url = IssuerUrl::new(config.env.issuer_url.clone())?;
     let provider_metadata = CoreProviderMetadata::discover(&issuer_url, &http_client)?;
 
     let client = CoreClient::from_provider_metadata(
         provider_metadata,
-        ClientId::new(config.pkce_client_id.clone()),
+        ClientId::new(config.env.pkce_client_id.clone()),
         None,
     );
 
@@ -114,14 +114,14 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
         .redirect(reqwest::redirect::Policy::none()) // Recommended for OIDC security
         .build()?;
 
-    let issuer_url = IssuerUrl::new(config.issuer_url.clone())?;
+    let issuer_url = IssuerUrl::new(config.env.issuer_url.clone())?;
 
     // Discovery takes a reference to the client
     let provider_metadata = CoreProviderMetadata::discover(&issuer_url, &http_client)?;
 
     let client = CoreClient::from_provider_metadata(
         provider_metadata,
-        ClientId::new(config.pkce_client_id.clone()),
+        ClientId::new(config.env.pkce_client_id.clone()),
         None,
     )
     .set_redirect_uri(RedirectUrl::new("http://localhost:8765".to_string())?);

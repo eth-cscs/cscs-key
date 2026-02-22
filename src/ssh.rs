@@ -112,7 +112,7 @@ fn download_key_oidc(config: &Config) -> anyhow::Result<()> {
 
     let client = reqwest::blocking::Client::new();
 
-    let response = client.post(config.keys_url.clone())
+    let response = client.post(config.env.keys_url.clone())
         .bearer_auth(&access_token)
         .json(&key_duration)
         .send()?;
@@ -182,7 +182,7 @@ fn sign_key_oidc(config: &Config) -> anyhow::Result<()> {
 
     let client = reqwest::blocking::Client::new();
 
-    let response = client.post(config.sign_url.clone())
+    let response = client.post(config.env.sign_url.clone())
         .bearer_auth(&access_token)
         .json(&public_key)
         .send()?;
