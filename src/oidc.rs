@@ -77,7 +77,11 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<String> {
 }
 
 fn refresh_access_token(config: &Config, refresh_token: &str) -> anyhow::Result<TokenStore> {
-    let http_client = reqwest::blocking::Client::new();
+    let http_client = reqwest::blocking::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .context("Failed to initialize HTTP client.")?;
     let issuer_url = IssuerUrl::new(config.env.issuer_url.clone())?;
     let provider_metadata = CoreProviderMetadata::discover(&issuer_url, &http_client)?;
 
@@ -198,13 +202,18 @@ fn login_via_api_key(config: &Config, api_key: &str) -> anyhow::Result<TokenStor
 
     let token_url = "https://api-service-account.hpc-user.tds.cscs.ch/api/v1/auth/token".to_string();
 
-    let client = reqwest::blocking::Client::new();
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .context("Failed to initialize HTTP client.")?;
 
     let response = client.post(token_url)
         .header("X-API-Key", api_key)
         .header("Content-Type", "application/json")
         .header("Accept", "application/json")
-        .send()?;
+        .send()
+        .context("Failed to send request to get access token.")?;
 
     let response_struct: ApiKeyResponse = response.json()?;
 
