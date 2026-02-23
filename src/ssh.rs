@@ -15,8 +15,8 @@ use crate::oidc::get_access_token;
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    GenOIDC,
-    SignOIDC,
+    Gen,
+    Sign,
     Status,
     List,
     Revoke,
@@ -87,8 +87,8 @@ where
 pub fn run(command: &Commands, config: &Config) -> anyhow::Result<()> {
     debug!{"ssh-key command"};
     match command {
-        Commands::GenOIDC => download_key_oidc(&config)?,
-        Commands::SignOIDC => sign_key_oidc(&config)?,
+        Commands::Gen => download_key(&config)?,
+        Commands::Sign => sign_key(&config)?,
         Commands::Status => status_key(&config)?,
         Commands::List => list_keys(&config)?,
         Commands::Revoke => revoke_keys(&config)?,
@@ -97,7 +97,7 @@ pub fn run(command: &Commands, config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn download_key_oidc(config: &Config) -> anyhow::Result<()> {
+fn download_key(config: &Config) -> anyhow::Result<()> {
     debug!("ssh-key gen-new subcommand");
     debug!("{:?}", config);
 
@@ -167,7 +167,7 @@ fn download_key_oidc(config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn sign_key_oidc(config: &Config) -> anyhow::Result<()> {
+fn sign_key(config: &Config) -> anyhow::Result<()> {
     debug!("ssh-key gen-new subcommand");
     debug!("{:?}", config);
 
