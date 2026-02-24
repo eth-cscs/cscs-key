@@ -32,7 +32,7 @@ impl Environment {
             },
             Self::Tds => EnvConfig {
                 pkce_client_id: "authx-cli".to_string(),
-                issuer_url: "https://auth.cscs.ch/auth/realms/cscs".to_string(),
+                issuer_url: "https://auth-tds.cscs.ch/auth/realms/cscs".to_string(),
                 keys_url: "https://api-ssh-service.hpc-ssh.tds.cscs.ch/api/v1/ssh-keys".to_string(),
                 sign_url: "https://api-ssh-service.hpc-ssh.tds.cscs.ch/api/v1/ssh-keys/sign".to_string(),
             },
