@@ -8,6 +8,9 @@ use std::path::PathBuf;
 use reqwest;
 use serde::{Serialize, Deserialize, Deserializer};
 use anyhow::{anyhow, bail, Context};
+use chrono::{Utc, Local, Duration, DateTime};
+use comfy_table::Table;
+use comfy_table::presets::UTF8_FULL;
 use log::{info, debug};
 
 use crate::config::Config;
@@ -47,6 +50,12 @@ struct PublicKey {
     duration: String,
 }
 
+#[derive(Serialize)]
+struct RevokeKey {
+    serial_number: String,
+    reason: String,
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct SshKeyNew {
@@ -68,7 +77,8 @@ struct SshserviceSuccessResponseNew {
 struct SshKeyCertNew {
     #[serde(deserialize_with = "ensure_newline")]
     public_key: String,
-    expire_time: String,
+    expire_time: DateTime<Utc>,
+    serial_number: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -80,6 +90,19 @@ struct SshserviceSuccessResponseCertNew {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct SshserviceErrorResponse {
+    message: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct SshserviceSuccessResponseCertsNew {
+    ssh_keys: Vec<SshKeyCertNew>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct SshserviceSuccessResponseRevoke {
+    revoked: bool,
     message: String,
 }
 
@@ -292,18 +315,84 @@ fn list_keys(config: &Config) -> anyhow::Result<()> {
     debug!("ssh-key list subcommand");
     debug!("{:?}", config);
 
-    todo!("ssh-key list");
+    let access_token = get_access_token(&config)?;
 
-    //Ok(())
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .context("Failed to initialize HTTP client.")?;
+
+    let response = client.get(config.env.keys_url.clone())
+        .bearer_auth(&access_token)
+        .send()
+        .context("Failed to send request to the ssh service.")?;
+
+    if !response.status().is_success() {
+        let error_response_struct: SshserviceErrorResponse = response.json()?;
+        bail!("{}", error_response_struct.message);
+    }
+
+    //debug!("response: {:?}", response);
+    //debug!("response.text: {:?}", response.text()?);
+
+    let response_struct: SshserviceSuccessResponseCertsNew = response.json()?;
+    //let response_struct = response.text()?;
+    //debug!("{:?}", response_struct);
+
+    let mut table = Table::new();
+    table.load_preset(UTF8_FULL);
+    table.set_header(vec!["Serial Number", "Validity", "Expire Time"]);
+    for key in response_struct.ssh_keys {
+        let validity = key.expire_time.clone() - Utc::now();
+        //table.add_row(vec![key.serial_number, validity.to_string(), key.expire_time.to_string()]);
+        //table.add_row(vec![key.serial_number, format_duration(&validity.to_std()?), key.expire_time.to_string()]);
+        let hours = validity.num_hours();
+        let mins = validity.num_minutes() % 60;
+        table.add_row(vec![key.serial_number, format!("{}h {}min", hours, mins), key.expire_time.with_timezone(&Local).to_string()]);
+    }
+    println!("{table}");
+
+    Ok(())
 }
 
 fn revoke_keys(config: &Config) -> anyhow::Result<()> {
     debug!("ssh-key revoke subcommand");
     debug!("{:?}", config);
 
-    todo!("ssh-key revoke");
+    let revoke_key = RevokeKey {
+        serial_number: "203356997434144007".to_string(),
+        reason: "user request".to_string(),
+    };
 
-    //Ok(())
+    let access_token = get_access_token(&config)?;
+
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .context("Failed to initialize HTTP client.")?;
+
+    let response = client.put(config.env.revoke_url.clone())
+        .bearer_auth(&access_token)
+        .json(&revoke_key)
+        .send()
+        .context("Failed to send request to the ssh service.")?;
+
+    if !response.status().is_success() {
+        let error_response_struct: SshserviceErrorResponse = response.json()?;
+        bail!("{}", error_response_struct.message);
+    }
+
+    //debug!("response: {:?}", response);
+    //debug!("response.text: {:?}", response.text()?);
+
+    let response_struct: SshserviceSuccessResponseRevoke = response.json()?;
+    //debug!("{:?}", response_struct);
+
+    println!("{}", response_struct.message);
+
+    Ok(())
 }
 
 fn format_duration(duration: &std::time::Duration) -> String {

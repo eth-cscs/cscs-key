@@ -11,6 +11,7 @@ pub struct EnvConfig {
     pub issuer_url: String,
     pub keys_url: String,
     pub sign_url: String,
+    pub revoke_url: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, Default, ValueEnum)]
@@ -29,12 +30,14 @@ impl Environment {
                 issuer_url: "https://auth.cscs.ch/auth/realms/cscs".to_string(),
                 keys_url: "https://api-ssh-service.hpc-ssh.svc.cscs.ch/api/v1/ssh-keys".to_string(),
                 sign_url: "https://api-ssh-service.hpc-ssh.svc.cscs.ch/api/v1/ssh-keys/sign".to_string(),
+                revoke_url: "https://api-ssh-service.hpc-ssh.svc.cscs.ch/api/v1/ssh-keys/revoke".to_string(),
             },
             Self::Tds => EnvConfig {
                 pkce_client_id: "authx-cli".to_string(),
                 issuer_url: "https://auth-tds.cscs.ch/auth/realms/cscs".to_string(),
                 keys_url: "https://api-ssh-service.hpc-ssh.tds.cscs.ch/api/v1/ssh-keys".to_string(),
                 sign_url: "https://api-ssh-service.hpc-ssh.tds.cscs.ch/api/v1/ssh-keys/sign".to_string(),
+                revoke_url: "https://api-ssh-service.hpc-ssh.tds.cscs.ch/api/v1/ssh-keys/revoke".to_string(),
             },
         }
     }
