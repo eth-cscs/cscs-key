@@ -195,7 +195,6 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     info!("Get OIDC token");
 
     let access_token = get_access_token(&config)?;
-    println!("got token: {}", access_token);
 
     let client = reqwest::blocking::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(5))
