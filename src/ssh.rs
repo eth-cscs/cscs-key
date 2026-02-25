@@ -43,17 +43,17 @@ pub enum Commands {
 #[derive(Args, Debug)]
 pub struct GenArgs {
     #[arg(short, long, help = "Path to save the private SSH key. Default is ~/.ssh/cscs-key")]
-    pub file: PathBuf,
+    pub file: Option<PathBuf>,
     #[arg(short, long, help = "Validity duration for the SSH key: '1d' (default) or '1min'")]
-    pub duration: KeyDuration,
+    pub duration: Option<KeyDuration>,
 }
 
 #[derive(Args, Debug)]
 pub struct SignArgs {
     #[arg(short, long, help = "Path to save the private SSH key. Default is ~/.ssh/cscs-key")]
-    pub file: PathBuf,
+    pub file: Option<PathBuf>,
     #[arg(short, long, help = "Validity duration for the SSH key: '1d' (default) or '1min'")]
-    pub duration: KeyDuration,
+    pub duration: Option<KeyDuration>,
 }
 
 #[derive(Args, Debug)]
@@ -187,9 +187,18 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     debug!("ssh-key gen-new subcommand");
     debug!("{:?}", config);
 
+    // todo
+    let config_duration = match config.key_validity.as_str() {
+        "1d" => KeyDuration::Day,
+        "1min" => KeyDuration::Minute,
+        _ => {
+            bail!("Invalid key validity duration in config: {}. Supported values are '1d' and '1min'.", config.key_validity);
+        }
+    };
+    // end todo
     let key_duration = SshKeyDuration {
         // todo
-        duration: args.duration,
+        duration: args.duration.unwrap_or(config_duration),
     };
 
     info!("Get OIDC token");
@@ -215,7 +224,8 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
 
     let response_struct: SshserviceSuccessResponseNew = response.json()?;
 
-    let private_key_path = args.file.clone();
+    //let private_key_path = args.file.clone();
+    let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
     let public_key_path = PathBuf::from(format!("{}-cert.pub", private_key_path.display()));
 
     if let Some(parent) = private_key_path.parent() {
@@ -257,14 +267,24 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     debug!("ssh-key gen-new subcommand");
     debug!("{:?}", config);
 
-    let private_key_path = args.file.clone();
+    //let private_key_path = args.file.clone();
+    let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
     let public_key_path = PathBuf::from(format!("{}-signing.pub", private_key_path.display()));
     info!("Reading public key in {}", public_key_path.display());
     let content = fs::read_to_string(public_key_path)?;
 
+    // todo
+    let config_duration = match config.key_validity.as_str() {
+        "1d" => KeyDuration::Day,
+        "1min" => KeyDuration::Minute,
+        _ => {
+            bail!("Invalid key validity duration in config: {}. Supported values are '1d' and '1min'.", config.key_validity);
+        }
+    };
+    // end todo
     let public_key = PublicKey {
         public_key: content,
-        duration: args.duration,
+        duration: args.duration.unwrap_or(config_duration),
     };
     debug!("public_key: {:?}", serde_json::to_string(&public_key)?);
 
@@ -296,7 +316,7 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     //let response_struct = response.text()?;
     debug!("{:?}", response_struct);
 
-    let private_key_path = args.file.clone();
+    let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
     let public_key_path = PathBuf::from(format!("{}-signing-cert.pub", private_key_path.display()));
 
     if let Some(parent) = private_key_path.parent() {
