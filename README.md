@@ -38,6 +38,7 @@ To sign an SSH key, use the following command:
 cscs-key sign
 ```
 The default key is `~/.ssh/cscs-key`. You can specify a different private key using the `-f, --file` option.
+
 The default duration of the signed key is 1 day. You can specify a different duration using the `-d, --duration` option. Possible values are `1d` or `1min`.
 
 ### Generate ssh key on the server (deprecated)
@@ -49,6 +50,7 @@ To generate a new SSH key on the server, use the following command:
 cscs-key gen
 ```
 The default key is `~/.ssh/cscs-key`. You can specify a different private key using the `-f, --file` option.
+
 The default duration of the signed key is 1 day. You can specify a different duration using the `-d, --duration` option. Possible values are `1d` or `1min`.
 
 ### List ssh keys
