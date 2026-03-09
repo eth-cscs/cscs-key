@@ -3,7 +3,7 @@ use std::io::Write;
 use reqwest;
 use serde::Deserialize;
 //use anyhow::{anyhow, bail, Context};
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use chrono::{Utc, Duration};
 //use log::{info, debug};
 use log::info;
@@ -19,6 +19,7 @@ use openidconnect::{
     OAuth2TokenResponse,
     TokenResponse,
     RefreshToken,
+    AccessTokenHash,
 };
 use std::io::{BufRead, BufReader};
 use std::net::TcpListener;
@@ -98,7 +99,7 @@ fn refresh_access_token(config: &Config, refresh_token: &str) -> anyhow::Result<
 
     let id_token = token_response
         .id_token()
-        .ok_or_else(|| anyhow::anyhow!("Server did not return an ID token"))?;
+        .ok_or_else(|| anyhow!("Server did not return an ID token"))?;
     let expires_in = token_response.expires_in().unwrap_or(std::time::Duration::ZERO);
     let expiration = Utc::now() + Duration::from_std(expires_in).unwrap();
 
@@ -164,7 +165,7 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
         .map(|(_, v)| v.into_owned())
         .context("No state found")?;
     if returned_state != *csrf_token.secret() {
-        return Err(anyhow::anyhow!("CSRF detected! State mismatch."));
+        return Err(anyhow!("CSRF detected! State mismatch."));
     }
 
     let code = url.query_pairs()
@@ -186,11 +187,26 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
         .set_pkce_verifier(pkce_verifier)
         .request(&http_client)?; // Look Ma, no http_client() helper!
 
-    // Check nonce: Replay protection
     let id_token = token_response
         .id_token()
-        .ok_or_else(|| anyhow::anyhow!("Server did not return an ID token"))?;
+        .ok_or_else(|| anyhow!("Server did not return an ID token"))?;
+
+    // Check nonce: Replay protection
+    // Verify the access token hash to ensure that the access token
+    // hasn't been substituted for another user's.
     let id_token_verifier = client.id_token_verifier();
+    let claims = id_token.claims(&id_token_verifier, &nonce)?;
+    if let Some(expected_access_token_hash) = claims.access_token_hash() {
+        let actual_access_token_hash = AccessTokenHash::from_token(
+            token_response.access_token(),
+            id_token.signing_alg()?,
+            id_token.signing_key(&id_token_verifier)?,
+        )?;
+        if actual_access_token_hash != *expected_access_token_hash {
+            return Err(anyhow!("Invalid access token"));
+        }
+    }
+
     let expires_in = token_response.expires_in().unwrap_or(std::time::Duration::ZERO);
     let expiration = Utc::now() + Duration::from_std(expires_in).unwrap();
 
