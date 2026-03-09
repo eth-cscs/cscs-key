@@ -33,6 +33,7 @@ pub enum Commands {
     /// certificate to the same path with '-signing-cert.pub' suffix.
     Sign(SignArgs),
     /// Print status of generated keys
+    #[clap(hide = true)]
     Status,
     /// List all SSH keys associated with the user
     List(ListArgs),
