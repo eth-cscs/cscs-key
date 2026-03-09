@@ -119,7 +119,7 @@ struct RevokeKey {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-struct SshKeyNew {
+struct SshKey {
     #[serde(deserialize_with = "ensure_newline")]
     public_key: String,
     #[serde(deserialize_with = "ensure_newline")]
@@ -129,13 +129,13 @@ struct SshKeyNew {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-struct SshserviceSuccessResponseNew {
-    ssh_key: SshKeyNew,
+struct SshserviceSuccessResponse {
+    ssh_key: SshKey,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-struct SshKeyCertNew {
+struct SshKeyCert {
     #[serde(deserialize_with = "ensure_newline")]
     public_key: String,
     expire_time: DateTime<Utc>,
@@ -145,8 +145,8 @@ struct SshKeyCertNew {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-struct SshserviceSuccessResponseCertNew {
-    ssh_key: SshKeyCertNew,
+struct SshserviceSuccessResponseCert {
+    ssh_key: SshKeyCert,
 }
 
 #[derive(Deserialize, Debug)]
@@ -157,8 +157,8 @@ struct SshserviceErrorResponse {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-struct SshserviceSuccessResponseCertsNew {
-    ssh_keys: Vec<SshKeyCertNew>,
+struct SshserviceSuccessResponseCerts {
+    ssh_keys: Vec<SshKeyCert>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -196,7 +196,7 @@ pub fn run(command: &Commands, config: &Config) -> anyhow::Result<()> {
 }
 
 fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
-    debug!("ssh-key gen-new subcommand");
+    debug!("ssh-key gen subcommand");
     debug!("{:?}", config);
 
     let key_duration = SshKeyDuration {
@@ -224,7 +224,7 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
         bail!("{}", error_response_struct.message);
     }
 
-    let response_struct: SshserviceSuccessResponseNew = response.json()?;
+    let response_struct: SshserviceSuccessResponse = response.json()?;
 
     //let private_key_path = args.file.clone();
     let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
@@ -266,7 +266,7 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
 }
 
 fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
-    debug!("ssh-key gen-new subcommand");
+    debug!("ssh-key gen subcommand");
     debug!("{:?}", config);
 
     //let private_key_path = args.file.clone();
@@ -305,7 +305,7 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     //debug!("response: {:?}", response);
     //debug!("response.text: {:?}", response.text()?);
 
-    let response_struct: SshserviceSuccessResponseCertNew = response.json()?;
+    let response_struct: SshserviceSuccessResponseCert = response.json()?;
     //let response_struct = response.text()?;
     debug!("{:?}", response_struct);
 
@@ -420,7 +420,7 @@ fn revoke_keys(config: &Config, args: &RevokeArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn list_keys_internal(config: &Config, all: bool) -> anyhow::Result<Vec<SshKeyCertNew>> {
+fn list_keys_internal(config: &Config, all: bool) -> anyhow::Result<Vec<SshKeyCert>> {
     let list_keys = ListKeys {
         include_revoked: all,
         include_expired: all,
@@ -449,7 +449,7 @@ fn list_keys_internal(config: &Config, all: bool) -> anyhow::Result<Vec<SshKeyCe
     //debug!("response: {:?}", response);
     //debug!("response.text: {:?}", response.text()?);
 
-    let response_struct: SshserviceSuccessResponseCertsNew = response.json()?;
+    let response_struct: SshserviceSuccessResponseCerts = response.json()?;
     //let response_struct = response.text()?;
     //debug!("{:?}", response_struct);
 
