@@ -7,6 +7,7 @@ use std::time::SystemTime;
 use std::path::PathBuf;
 use reqwest;
 use serde::{Serialize, Deserialize, Deserializer};
+use secrecy::{SecretString, ExposeSecret};
 use anyhow::{anyhow, bail, Context};
 use chrono::{Utc, Local, Duration, DateTime};
 use humantime::format_duration;
@@ -121,10 +122,10 @@ struct RevokeKey {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct SshKey {
-    #[serde(deserialize_with = "ensure_newline")]
+    #[serde(deserialize_with = "ensure_newline_string")]
     public_key: String,
-    #[serde(deserialize_with = "ensure_newline")]
-    private_key: String,
+    #[serde(deserialize_with = "ensure_newline_secretstring")]
+    private_key: SecretString,
     expire_time: String,
 }
 
@@ -137,7 +138,7 @@ struct SshserviceSuccessResponse {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct SshKeyCert {
-    #[serde(deserialize_with = "ensure_newline")]
+    #[serde(deserialize_with = "ensure_newline_string")]
     public_key: String,
     expire_time: DateTime<Utc>,
     serial_number: String,
@@ -170,17 +171,29 @@ struct SshserviceSuccessResponseRevoke {
 }
 
 // Ensure downloaded ssh keys end with \n
-fn ensure_newline<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let mut s = String::deserialize(deserializer)?;
-
+fn ensure_newline(mut s: String) -> String {
     if !s.ends_with('\n') {
         s.push('\n');
     }
+    s
+}
 
-    Ok(s)
+fn ensure_newline_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+
+    Ok(ensure_newline(s))
+}
+
+fn ensure_newline_secretstring<'de, D>(deserializer: D) -> Result<SecretString, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+
+    Ok(SecretString::from(ensure_newline(s)))
 }
 
 pub fn run(command: &Commands, config: &Config) -> anyhow::Result<()> {
@@ -260,7 +273,7 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     // Save private key
     let mut private_file = File::create(&private_key_path)?;
     debug!("Saving private key in {}", private_key_path.display());
-    private_file.write_all(response_struct.ssh_key.private_key.as_bytes())?;
+    private_file.write_all(response_struct.ssh_key.private_key.expose_secret().as_bytes())?;
     #[cfg(unix)] // Only apply on Unix-like systems
     {
         debug!("Setting permissions for private key to 0o600: {}", private_key_path.display());
