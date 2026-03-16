@@ -219,12 +219,21 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
         .send()
         .context("Failed to send request to the ssh service.")?;
 
-    if !response.status().is_success() {
-        let error_response_struct: SshserviceErrorResponse = response.json()?;
+    let status = response.status();
+    let response_bytes = response.bytes()?;
+
+    if !status.is_success() {
+        let error_response_struct: SshserviceErrorResponse = serde_json::from_slice(&response_bytes)?;
         bail!("{}", error_response_struct.message);
     }
 
-    let response_struct: SshserviceSuccessResponse = response.json()?;
+    let response_struct: SshserviceSuccessResponse = serde_json::from_slice(&response_bytes)
+        .with_context(||
+            format!(
+                "Failed to parse the respons form SSH servide. Response body: {:?}",
+                String::from_utf8_lossy(&response_bytes)
+            ))?;
+    trace!("Parsed SSH service response: {:?}", response_struct);
 
     //let private_key_path = args.file.clone();
     let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
@@ -295,17 +304,21 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
         .send()
         .context("Failed to send request to the ssh service.")?;
 
-    if !response.status().is_success() {
-        let error_response_struct: SshserviceErrorResponse = response.json()?;
+    let status = response.status();
+    let response_bytes = response.bytes()?;
+
+    if !status.is_success() {
+        let error_response_struct: SshserviceErrorResponse = serde_json::from_slice(&response_bytes)?;
         bail!("{}", error_response_struct.message);
     }
 
-    //trace!("response: {:?}", response);
-    //trace!("response.text: {:?}", response.text()?);
-
-    let response_struct: SshserviceSuccessResponseCert = response.json()?;
-    //let response_struct = response.text()?;
-    trace!("{:?}", response_struct);
+    let response_struct: SshserviceSuccessResponseCert = serde_json::from_slice(&response_bytes)
+        .with_context(||
+            format!(
+                "Failed to parse the respons form SSH servide. Response body: {:?}",
+                String::from_utf8_lossy(&response_bytes)
+            ))?;
+    trace!("Parsed SSH service response: {:?}", response_struct);
 
     let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
     let public_key_path = PathBuf::from(format!("{}-signing-cert.pub", private_key_path.display()));
@@ -437,17 +450,20 @@ fn list_keys_internal(config: &Config, all: bool) -> anyhow::Result<Vec<SshKeyCe
         .send()
         .context("Failed to send request to the ssh service.")?;
 
-    if !response.status().is_success() {
-        let error_response_struct: SshserviceErrorResponse = response.json()?;
+    let status = response.status();
+    let response_bytes = response.bytes()?;
+
+    if !status.is_success() {
+        let error_response_struct: SshserviceErrorResponse = serde_json::from_slice(&response_bytes)?;
         bail!("{}", error_response_struct.message);
     }
 
-    //trace!("response: {:?}", response);
-    //trace!("response.text: {:?}", response.text()?);
-
-    let response_struct: SshserviceSuccessResponseCerts = response.json()?;
-    //let response_struct = response.text()?;
-    //trace!("{:?}", response_struct);
+    let response_struct: SshserviceSuccessResponseCerts = serde_json::from_slice(&response_bytes)
+        .with_context(||
+            format!(
+                "Failed to parse the respons form SSH servide. Response body: {:?}",
+                String::from_utf8_lossy(&response_bytes)
+            ))?;
 
     Ok(response_struct.ssh_keys)
 }
@@ -478,16 +494,21 @@ fn revoke_key(config: &Config, key_id: String, dry: bool) -> anyhow::Result<()> 
         .send()
         .context("Failed to send request to the ssh service.")?;
 
-    if !response.status().is_success() {
-        let error_response_struct: SshserviceErrorResponse = response.json()?;
+    let status = response.status();
+    let response_bytes = response.bytes()?;
+
+    if !status.is_success() {
+        let error_response_struct: SshserviceErrorResponse = serde_json::from_slice(&response_bytes)?;
         bail!("{}", error_response_struct.message);
     }
 
-    //trace!("response: {:?}", response);
-    //trace!("response.text: {:?}", response.text()?);
-
-    let response_struct: SshserviceSuccessResponseRevoke = response.json()?;
-    //trace!("{:?}", response_struct);
+    let response_struct: SshserviceSuccessResponseRevoke = serde_json::from_slice(&response_bytes)
+        .with_context(||
+            format!(
+                "Failed to parse the respons form SSH servide. Response body: {:?}",
+                String::from_utf8_lossy(&response_bytes)
+            ))?;
+    trace!("Parsed SSH service response: {:?}", response_struct);
 
     let revoked = if response_struct.revoked {
         "✅"
