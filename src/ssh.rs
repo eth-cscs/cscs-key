@@ -13,7 +13,8 @@ use chrono::{Utc, Local, Duration, DateTime};
 use humantime::format_duration;
 use chrono_humanize::HumanTime;
 use comfy_table::Table;
-use comfy_table::presets::UTF8_FULL;
+use comfy_table::presets::{UTF8_FULL, NOTHING};
+use comfy_table::modifiers::{UTF8_ROUND_CORNERS, UTF8_SOLID_INNER_BORDERS};
 use log::{info, debug, trace};
 
 use crate::config::Config;
@@ -413,7 +414,13 @@ fn list_keys(config: &Config, args: &ListArgs) -> anyhow::Result<()> {
     let ssh_keys = list_keys_internal(&config, args.all)?;
 
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    if table.is_tty() {
+        table.load_preset(UTF8_FULL);
+        table.apply_modifier(UTF8_ROUND_CORNERS);
+        table.apply_modifier(UTF8_SOLID_INNER_BORDERS);
+    } else {
+        table.load_preset(NOTHING);
+    }
     table.set_header(vec!["Serial Number", "Valid", "Expiration", "Expire Time"]);
     for key in ssh_keys {
         let valid = if key.revocation_time.is_some() {
@@ -427,7 +434,7 @@ fn list_keys(config: &Config, args: &ListArgs) -> anyhow::Result<()> {
 
         table.add_row(vec![key.serial_number, valid.to_string(), HumanTime::from(expiration).to_string(), key.expire_time.with_timezone(&Local).to_string()]);
     }
-    info!("{table}");
+    println!("{table}");
 
     Ok(())
 }
