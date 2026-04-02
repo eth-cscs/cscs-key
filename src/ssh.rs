@@ -15,7 +15,7 @@ use chrono_humanize::HumanTime;
 use comfy_table::Table;
 use comfy_table::presets::{UTF8_FULL, NOTHING};
 use comfy_table::modifiers::{UTF8_ROUND_CORNERS, UTF8_SOLID_INNER_BORDERS};
-use log::{info, warn, debug, trace};
+use log::{info, debug, trace};
 
 use crate::config::Config;
 use crate::oidc::get_access_token;
@@ -263,7 +263,7 @@ fn ensure_public_key(private_key_path: &PathBuf) -> anyhow::Result<()> {
     }
 
     if !public_key_path.exists() {
-        warn!(
+        info!(
             "Public key not found at {}. Regenerating from private key.",
             public_key_path.display()
         );
@@ -283,7 +283,7 @@ fn ensure_public_key(private_key_path: &PathBuf) -> anyhow::Result<()> {
     let pub_fp = public_key.fingerprint(ssh_key::HashAlg::Sha256);
 
     if priv_fp != pub_fp {
-        warn!(
+        info!(
             "Fingerprint mismatch between {} and {}. Regenerating public key.",
             private_key_path.display(),
             public_key_path.display()
