@@ -75,6 +75,18 @@ Or to revoke all keys, use the `-a, --all` option:
 cscs-key revoke -a
 ```
 
+### Generate completion script
+To generate a completion script for your shell, use the following command:
+```bash
+cscs-key completion <shell>
+```
+Replace `<shell>` with your shell. Possible values: `bash`, `zsh`, `fish`, `powershell`, or `elvish`.
+
+To automatically activate the completion when you start a new shell session, you can add the following line to your shell configuration file (e.g., `~/.bashrc` for bash):
+```bash
+source <(cscs-key completion bash)
+```
+
 ## Authentication
 
 Users authenticate using the Open ID Connect (OIDC) protocol. The tool opens a web browser where the user authenticates with the CSCS credentials. After successful authentication, an access token is stored locally. This way users only need to authenticate about once per day.

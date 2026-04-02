@@ -8,6 +8,7 @@ mod config;
 mod state;
 mod oidc;
 mod ssh;
+mod completion;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]

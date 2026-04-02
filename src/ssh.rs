@@ -19,6 +19,7 @@ use log::{info, debug, trace};
 
 use crate::config::Config;
 use crate::oidc::get_access_token;
+use crate::completion::{CompletionArgs, generate_completion};
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
@@ -43,6 +44,8 @@ pub enum Commands {
     List(ListArgs),
     /// Revoke keys associated with the user
     Revoke(RevokeArgs),
+    /// Generate shell completion script
+    Completion(CompletionArgs),
 }
 
 #[derive(Args, Debug)]
@@ -213,6 +216,7 @@ pub fn run(command: &Commands, config: &Config) -> anyhow::Result<()> {
         Commands::Status => status_key(&config)?,
         Commands::List(args) => list_keys(&config, args)?,
         Commands::Revoke(args) => revoke_keys(&config, args)?,
+        Commands::Completion(args) => generate_completion(args)?,
     }
 
     Ok(())
