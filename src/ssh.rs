@@ -55,6 +55,8 @@ pub struct GenArgs {
     pub file: Option<PathBuf>,
     #[arg(short, long, help = "Validity duration for the SSH key: '1d' (default) or '1min'")]
     pub duration: Option<KeyDuration>,
+    #[arg(short, long, help = "Overwrite existing private key without asking")]
+    pub yes: bool,
 }
 
 #[derive(Args, Debug)]
@@ -342,6 +344,18 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
 
     if let Some(parent) = private_key_path.parent() {
         std::fs::create_dir_all(parent)?;
+    }
+
+    // if we're overwriting an existing private file, we should probably ask the user
+    if private_key_path.exists() && !args.yes {
+        use dialoguer::Confirm;
+        let confirm = Confirm::new()
+            .with_prompt(format!("Private key already exists at {}. Overwrite?", private_key_path.display()))
+            .default(false)
+            .interact()?;
+        if !confirm {
+            bail!("Operation cancelled by user.");
+        }
     }
 
     // Save public key

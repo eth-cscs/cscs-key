@@ -11,6 +11,7 @@ clap = { version = "4.5.40", features = ["derive"] }
 clap-verbosity-flag = "3.0.4"
 clap_complete = "4.6.0"
 comfy-table = "7.2.2"
+dialoguer = "0.12.0"
 directories = "6.0.0"
 dirs = "6.0.0"
 duration-str = "0.17.0"
