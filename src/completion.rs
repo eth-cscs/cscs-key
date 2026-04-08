@@ -1,6 +1,6 @@
 use clap::{Args, CommandFactory};
 use clap_complete::{generate, Shell};
-use log::{info, trace};
+use log::{debug, trace};
 
 #[derive(Args, Debug)]
 pub struct CompletionArgs {
@@ -16,7 +16,7 @@ pub fn generate_completion(args: &CompletionArgs) -> anyhow::Result<()> {
     let mut cmd = crate::Cli::command();
     let bin_name = cmd.get_name().to_string();
 
-    info!("Generating {} completion script.", shell);
+    debug!("Generating {} completion script.", shell);
     generate(shell, &mut cmd, bin_name, &mut std::io::stdout());
 
     Ok(())
