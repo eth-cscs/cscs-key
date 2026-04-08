@@ -84,6 +84,7 @@ Replace `<shell>` with your shell. Possible values: `bash`, `zsh`, `fish`, `powe
 
 To automatically activate the completion when you start a new shell session, you can add the following line to your shell configuration file (e.g., `~/.bashrc` for bash):
 ```bash
+# Enable cscs-key completion
 source <(cscs-key completion bash)
 ```
 
