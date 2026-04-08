@@ -41,7 +41,7 @@ pub enum Commands {
     Status,
     /// List all SSH keys associated with the user
     List(ListArgs),
-    /// Revoke kyes associated with the user
+    /// Revoke keys associated with the user
     Revoke(RevokeArgs),
 }
 
