@@ -42,6 +42,11 @@ impl AppState {
             .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
         let cache_dir = proj_dirs.cache_dir();
         fs::create_dir_all(cache_dir)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(cache_dir, fs::Permissions::from_mode(0o700))?;
+        }
         Ok(cache_dir.join("token.json"))
     }
 
