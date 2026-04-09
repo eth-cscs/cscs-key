@@ -263,7 +263,6 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
         )?;
     trace!("Parsed SSH service response: {:?}", response_struct);
 
-    //let private_key_path = args.file.clone();
     let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
     let public_key_path = PathBuf::from(format!("{}-cert.pub", private_key_path.display()));
 
@@ -306,12 +305,11 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     trace!("sign subcommand");
     trace!("{:?}", args);
 
-    //let private_key_path = args.file.clone();
     let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
     let public_key_path = PathBuf::from(format!("{}.pub", private_key_path.display()));
     debug!("Reading public key in {}", public_key_path.display());
-    let content = fs::read_to_string(public_key_path)?;
-
+    let content = fs::read_to_string(&public_key_path)
+        .with_context(|| format!("Failed reading public key: {}", &public_key_path.display()))?;
     let public_key = PublicKey {
         public_key: content,
         duration: args.duration.unwrap_or(config.key_validity),
