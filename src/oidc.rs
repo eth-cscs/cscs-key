@@ -64,7 +64,7 @@ struct OAuthError {
     error_description: Option<String>,
 }
 
-pub fn get_access_token(config: &Config) -> anyhow::Result<String> {
+pub fn get_access_token(config: &Config) -> anyhow::Result<SecretString> {
     trace!("get access token");
 
     if let Ok(api_key) = std::env::var("CSCS_API_KEY") {
@@ -88,7 +88,7 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<String> {
         // Token is expired, try to use the refresh token
         if let Some(refresh_token) = &token.refresh_token {
             debug!("Access token is expired, attempting refresh...");
-            match refresh_access_token(config, refresh_token) {
+            match refresh_access_token(config, refresh_token.expose_secret()) {
                 Ok(new_token) => {
                     let ret_access_token = new_token.access_token.clone();
                     state.oidc_token = Some(new_token);
@@ -143,9 +143,9 @@ fn refresh_access_token(config: &Config, refresh_token: &str) -> anyhow::Result<
     let expiration = Utc::now() + Duration::from_std(expires_in).unwrap();
 
     Ok(TokenStore {
-        access_token: token_response.access_token().secret().to_string(),
-        refresh_token: Some(token_response.refresh_token().unwrap().secret().to_string()),
-        id_token: Some(id_token.to_string()),
+        access_token: token_response.access_token().secret().as_str().into(),
+        refresh_token: Some(token_response.refresh_token().unwrap().secret().as_str().into()),
+        id_token: Some(id_token.to_string().into()),
         expiration: Some(expiration),
     })
 }
@@ -250,9 +250,9 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
     let expiration = Utc::now() + Duration::from_std(expires_in).unwrap();
 
     Ok(TokenStore {
-        access_token: token_response.access_token().secret().to_string(),
-        refresh_token: Some(token_response.refresh_token().unwrap().secret().to_string()),
-        id_token: Some(id_token.to_string()),
+        access_token: token_response.access_token().secret().as_str().into(),
+        refresh_token: Some(token_response.refresh_token().unwrap().secret().as_str().into()),
+        id_token: Some(id_token.to_string().into()),
         expiration: Some(expiration),
     })
 }
@@ -433,9 +433,9 @@ fn login_via_api_key(config: &Config, api_key: &str) -> anyhow::Result<TokenStor
     let expiration = Utc::now() + expires_in;
 
     Ok(TokenStore {
-        access_token: response_struct.access_token.expose_secret().to_string(),
+        access_token: response_struct.access_token,
         refresh_token: None,
-        id_token: Some(response_struct.id_token.expose_secret().to_string()),
+        id_token: Some(response_struct.id_token),
         expiration: Some(expiration),
     })
 }
