@@ -285,18 +285,21 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     }
     info!("Public SSH key successfully downloaded to {}", public_key_path.display());
 
-    // Save private key
-    let mut private_file = File::create(&private_key_path)?;
+    // Save private key with restricted permissions from creation
     debug!("Saving private key in {}", private_key_path.display());
+    #[cfg(unix)]
+    let mut private_file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&private_key_path)?
+    };
+    #[cfg(not(unix))]
+    let mut private_file = File::create(&private_key_path)?;
     private_file.write_all(response_struct.ssh_key.private_key.expose_secret().as_bytes())?;
-    #[cfg(unix)] // Only apply on Unix-like systems
-    {
-        debug!("Setting permissions for private key to 0o600: {}", private_key_path.display());
-        use std::os::unix::fs::PermissionsExt;
-        let mut permissions = private_file.metadata()?.permissions();
-        permissions.set_mode(0o600); // Read/write for owner only
-        std::fs::set_permissions(&private_key_path, permissions)?;
-    }
     info!("Private SSH key successfully downloaded to: {}", private_key_path.display());
 
     Ok(())

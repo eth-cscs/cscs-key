@@ -76,6 +76,21 @@ impl Config {
         let config_dir = proj_dirs.config_dir();
         let config_file_path = config_dir.join("config.toml");
 
+        #[cfg(unix)]
+        if config_file_path.exists() {
+            use std::os::unix::fs::MetadataExt;
+            let mode = std::fs::metadata(&config_file_path)?.mode();
+            if mode & 0o022 != 0 {
+                anyhow::bail!(
+                    "Config file {} is writable by group or others (mode {:04o}). \
+                     Fix with: chmod go-w {}",
+                    config_file_path.display(),
+                    mode & 0o777,
+                    config_file_path.display()
+                );
+            }
+        }
+
         trace!("Config priorities:
     1. cli args
     2. config file {}

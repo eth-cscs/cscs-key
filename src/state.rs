@@ -42,6 +42,11 @@ impl AppState {
             .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
         let cache_dir = proj_dirs.cache_dir();
         fs::create_dir_all(cache_dir)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(cache_dir, fs::Permissions::from_mode(0o700))?;
+        }
         Ok(cache_dir.join("token.json"))
     }
 
@@ -59,7 +64,22 @@ impl AppState {
         let path = Self::get_path()?;
         debug!("Saving state to cache {}", path.display());
         let json = serde_json::to_string_pretty(self)?;
-        fs::write(path, json)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            use std::io::Write;
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(&path)?;
+            file.write_all(json.as_bytes())?;
+        }
+        #[cfg(not(unix))]
+        {
+            fs::write(&path, json)?;
+        }
         Ok(())
     }
 }

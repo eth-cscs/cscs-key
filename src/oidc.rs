@@ -2,6 +2,7 @@
 use std::io::Write;
 use reqwest;
 use serde::Deserialize;
+use secrecy::{SecretString, ExposeSecret};
 use anyhow::{anyhow, bail, Context};
 use chrono::{Utc, Duration};
 use log::{info, debug, trace};
@@ -25,9 +26,9 @@ use url::Url;
 
 #[derive(Deserialize, Debug)]
 struct ApiKeyResponse {
-    access_token: String,
+    access_token: SecretString,
     expires_in: i64,
-    id_token: String,
+    id_token: SecretString,
 }
 
 #[derive(Deserialize, Debug)]
@@ -262,9 +263,9 @@ fn login_via_api_key(config: &Config, api_key: &str) -> anyhow::Result<TokenStor
     let expiration = Utc::now() + expires_in;
 
     Ok(TokenStore {
-        access_token: response_struct.access_token,
+        access_token: response_struct.access_token.expose_secret().to_string(),
         refresh_token: None,
-        id_token: Some(response_struct.id_token),
+        id_token: Some(response_struct.id_token.expose_secret().to_string()),
         expiration: Some(expiration),
     })
 }
