@@ -322,8 +322,6 @@ fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
         .unwrap_or(&device_auth.verification_uri);
     if let Ok(code) = QrCode::new(qr_url) {
         let qr_string = code.render::<unicode::Dense1x2>()
-            .dark_color(unicode::Dense1x2::Light)
-            .light_color(unicode::Dense1x2::Dark)
             .quiet_zone(false)
             .module_dimensions(1, 1)
             .build();
