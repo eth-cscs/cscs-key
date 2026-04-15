@@ -62,11 +62,6 @@ struct OAuthError {
     error_description: Option<String>,
 }
 
-/// Detect if we are running inside a remote SSH session where a browser cannot be opened.
-fn is_remote_session() -> bool {
-    std::env::var("SSH_CONNECTION").is_ok() || std::env::var("SSH_TTY").is_ok()
-}
-
 pub fn get_access_token(config: &Config) -> anyhow::Result<String> {
     trace!("get access token");
 
@@ -106,8 +101,8 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<String> {
     }
 
     // Cache or refresh failed -> interactive login
-    let new_token = if is_remote_session() {
-        debug!("Remote session detected (SSH), using device authorization flow.");
+    let new_token = if config.headless {
+        debug!("Headless mode enabled, using device authorization flow.");
         login_via_device_code(config)?
     } else {
         debug!("Token does not exist in store or was not refreshed -> browser authentication.");
