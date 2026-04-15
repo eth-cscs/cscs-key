@@ -6,6 +6,8 @@ use secrecy::{SecretString, ExposeSecret};
 use anyhow::{anyhow, bail, Context};
 use chrono::{Utc, Duration};
 use log::{info, debug, trace};
+use qrcode::QrCode;
+use qrcode::render::unicode;
 
 use crate::config::Config;
 use crate::state::{AppState, TokenStore};
@@ -315,6 +317,21 @@ fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
         info!("Or open this URL directly:");
         info!("  {}", uri);
     }
+
+    let qr_url = device_auth.verification_uri_complete.as_deref()
+        .unwrap_or(&device_auth.verification_uri);
+    if let Ok(code) = QrCode::new(qr_url) {
+        let qr_string = code.render::<unicode::Dense1x2>()
+            .dark_color(unicode::Dense1x2::Light)
+            .light_color(unicode::Dense1x2::Dark)
+            .quiet_zone(false)
+            .module_dimensions(1, 1)
+            .build();
+        info!("");
+        info!("Or scan this QR code:");
+        info!("\n{}", qr_string);
+    }
+
     info!("");
     info!("Waiting for authentication...");
 
