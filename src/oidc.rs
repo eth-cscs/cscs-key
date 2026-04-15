@@ -99,7 +99,7 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<String> {
                     return Ok(ret_access_token);
                 }
                 Err(e) => {
-                    debug!("Access token refresh failed: {}. Falling back to browser login.", e);
+                    debug!("Access token refresh failed: {}. Falling back to interactive login.", e);
                 }
             }
         }
