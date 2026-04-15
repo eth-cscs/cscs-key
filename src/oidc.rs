@@ -57,7 +57,7 @@ struct DeviceTokenSuccess {
 }
 
 #[derive(Deserialize, Debug)]
-struct DeviceTokenError {
+struct OAuthError {
     error: String,
     error_description: Option<String>,
 }
@@ -301,9 +301,9 @@ fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
         .context("Failed to request device authorization code.")?;
 
     if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().unwrap_or_default();
-        bail!("Device authorization request failed ({}): {}", status, body);
+        let err: OAuthError = response.json()
+            .context("Failed to parse device authorization error response.")?;
+        bail!("{}", err.error_description.unwrap_or(err.error));
     }
 
     let device_auth: DeviceAuthResponse = response.json()
@@ -365,7 +365,7 @@ fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
             });
         }
 
-        let err: DeviceTokenError = serde_json::from_slice(&response_bytes)
+        let err: OAuthError = serde_json::from_slice(&response_bytes)
             .with_context(|| format!(
                 "Failed to parse device token error response: {:?}",
                 String::from_utf8_lossy(&response_bytes)
