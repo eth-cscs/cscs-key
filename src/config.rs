@@ -1,10 +1,13 @@
-use clap::{Parser, ValueEnum};
-use serde::{Deserialize, Serialize};
-use directories::ProjectDirs;
-use std::path::PathBuf;
 use anyhow::Context;
-use figment::{Figment, providers::{Format, Toml, Serialized}};
+use clap::{Parser, ValueEnum};
+use directories::ProjectDirs;
+use figment::{
+    Figment,
+    providers::{Format, Serialized, Toml},
+};
 use log::trace;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 use crate::ssh::KeyDuration;
 
@@ -28,25 +31,38 @@ pub enum Environment {
 }
 
 impl Environment {
+    #[allow(clippy::wrong_self_convention)]
     pub fn to_config(&self) -> EnvConfig {
         match self {
             Self::Prod => EnvConfig {
                 name: "prod".to_string(),
                 pkce_client_id: "authx-cli".to_string(),
                 issuer_url: "https://auth.cscs.ch/auth/realms/cscs".to_string(),
-                token_url: "https://authx-gateway.svc.cscs.ch/api-service-account/api/v1/auth/token".to_string(),
-                keys_url: "https://authx-gateway.svc.cscs.ch/api-ssh-service/api/v1/ssh-keys".to_string(),
-                sign_url: "https://authx-gateway.svc.cscs.ch/api-ssh-service/api/v1/ssh-keys/sign".to_string(),
-                revoke_url: "https://authx-gateway.svc.cscs.ch/api-ssh-service/api/v1/ssh-keys/revoke".to_string(),
+                token_url:
+                    "https://authx-gateway.svc.cscs.ch/api-service-account/api/v1/auth/token"
+                        .to_string(),
+                keys_url: "https://authx-gateway.svc.cscs.ch/api-ssh-service/api/v1/ssh-keys"
+                    .to_string(),
+                sign_url: "https://authx-gateway.svc.cscs.ch/api-ssh-service/api/v1/ssh-keys/sign"
+                    .to_string(),
+                revoke_url:
+                    "https://authx-gateway.svc.cscs.ch/api-ssh-service/api/v1/ssh-keys/revoke"
+                        .to_string(),
             },
             Self::Tds => EnvConfig {
                 name: "tds".to_string(),
                 pkce_client_id: "authx-cli".to_string(),
                 issuer_url: "https://auth-tds.cscs.ch/auth/realms/cscs".to_string(),
-                token_url: "https://authx-gateway.tds.cscs.ch/api-service-account/api/v1/auth/token".to_string(),
-                keys_url: "https://authx-gateway.tds.cscs.ch/api-ssh-service/api/v1/ssh-keys".to_string(),
-                sign_url: "https://authx-gateway.tds.cscs.ch/api-ssh-service/api/v1/ssh-keys/sign".to_string(),
-                revoke_url: "https://authx-gateway.tds.cscs.ch/api-ssh-service/api/v1/ssh-keys/revoke".to_string(),
+                token_url:
+                    "https://authx-gateway.tds.cscs.ch/api-service-account/api/v1/auth/token"
+                        .to_string(),
+                keys_url: "https://authx-gateway.tds.cscs.ch/api-ssh-service/api/v1/ssh-keys"
+                    .to_string(),
+                sign_url: "https://authx-gateway.tds.cscs.ch/api-ssh-service/api/v1/ssh-keys/sign"
+                    .to_string(),
+                revoke_url:
+                    "https://authx-gateway.tds.cscs.ch/api-ssh-service/api/v1/ssh-keys/revoke"
+                        .to_string(),
             },
         }
     }
@@ -68,7 +84,10 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn load(cli_env: Option<Environment>, cli_overrides: &ConfigCliOverride) -> anyhow::Result<Self> {
+    pub fn load(
+        cli_env: Option<Environment>,
+        cli_overrides: &ConfigCliOverride,
+    ) -> anyhow::Result<Self> {
         trace!("Loading app configuration");
 
         let proj_dirs = ProjectDirs::from("ch", "cscs", "cscs-key")
@@ -91,10 +110,13 @@ impl Config {
             }
         }
 
-        trace!("Config priorities:
+        trace!(
+            "Config priorities:
     1. cli args
     2. config file {}
-    3. default values", config_file_path.display());
+    3. default values",
+            config_file_path.display()
+        );
 
         let raw_config: RawConfig = Figment::new()
             .merge(Serialized::defaults(RawConfig::default()))

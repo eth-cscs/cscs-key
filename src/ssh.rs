@@ -1,26 +1,25 @@
-use clap::{Subcommand, Args, ValueEnum};
+use anyhow::{Context, anyhow, bail};
+use chrono::{DateTime, Duration, Local, Utc};
+use chrono_humanize::HumanTime;
+use clap::{Args, Subcommand, ValueEnum};
+use comfy_table::Table;
+use comfy_table::modifiers::{UTF8_ROUND_CORNERS, UTF8_SOLID_INNER_BORDERS};
+use comfy_table::presets::{NOTHING, UTF8_FULL};
+use humantime::format_duration;
+use log::{debug, info, trace};
+use secrecy::{ExposeSecret, SecretString};
+use serde::{Deserialize, Deserializer, Serialize};
+use std::fmt::Debug;
 use std::fs;
 use std::fs::{File, metadata};
 use std::io::Write;
-use std::fmt::Debug;
-use std::time::SystemTime;
 use std::path::PathBuf;
-use reqwest;
-use serde::{Serialize, Deserialize, Deserializer};
-use secrecy::{SecretString, ExposeSecret};
-use anyhow::{anyhow, bail, Context};
-use chrono::{Utc, Local, Duration, DateTime};
-use humantime::format_duration;
-use chrono_humanize::HumanTime;
-use comfy_table::Table;
-use comfy_table::presets::{UTF8_FULL, NOTHING};
-use comfy_table::modifiers::{UTF8_ROUND_CORNERS, UTF8_SOLID_INNER_BORDERS};
-use log::{info, debug, trace};
+use std::time::SystemTime;
 
-use crate::config::Config;
-use crate::oidc::get_access_token;
 use crate::completion::{CompletionArgs, generate_completion};
+use crate::config::Config;
 use crate::http;
+use crate::oidc::get_access_token;
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
@@ -30,6 +29,7 @@ pub enum Commands {
     /// The private key will be saved to the path specified in the config or -f/--file.
     /// Default private key path is ~/.ssh/cscs-key.
     /// The public key certificate will be saved the same path with '-cert.pub' suffix.
+    #[clap(hide = true)]
     Gen(GenArgs),
     /// Sign an existing SSH public key
     ///
@@ -51,23 +51,43 @@ pub enum Commands {
 
 #[derive(Args, Debug)]
 pub struct GenArgs {
-    #[arg(short, long, help = "Path to save the private SSH key. Default is ~/.ssh/cscs-key")]
+    #[arg(
+        short,
+        long,
+        help = "Path to save the private SSH key. Default is ~/.ssh/cscs-key"
+    )]
     pub file: Option<PathBuf>,
-    #[arg(short, long, help = "Validity duration for the SSH key: '1d' (default) or '1min'")]
+    #[arg(
+        short,
+        long,
+        help = "Validity duration for the SSH key: '1d' (default) or '1min'"
+    )]
     pub duration: Option<KeyDuration>,
 }
 
 #[derive(Args, Debug)]
 pub struct SignArgs {
-    #[arg(short, long, help = "Path to save the private SSH key. Default is ~/.ssh/cscs-key")]
+    #[arg(
+        short,
+        long,
+        help = "Path to save the private SSH key. Default is ~/.ssh/cscs-key"
+    )]
     pub file: Option<PathBuf>,
-    #[arg(short, long, help = "Validity duration for the SSH key: '1d' (default) or '1min'")]
+    #[arg(
+        short,
+        long,
+        help = "Validity duration for the SSH key: '1d' (default) or '1min'"
+    )]
     pub duration: Option<KeyDuration>,
 }
 
 #[derive(Args, Debug)]
 pub struct ListArgs {
-    #[arg(short, long, help = "List all SSH keys, including expired and revoked ones")]
+    #[arg(
+        short,
+        long,
+        help = "List all SSH keys, including expired and revoked ones"
+    )]
     pub all: bool,
 }
 
@@ -77,7 +97,10 @@ pub struct RevokeArgs {
     pub key_id: Vec<String>,
     #[arg(short, long, help = "Revoke all SSH keys")]
     pub all: bool,
-    #[arg(long, help = "Dry run: print which keys would be revoked without actually revoking them")]
+    #[arg(
+        long,
+        help = "Dry run: print which keys would be revoked without actually revoking them"
+    )]
     pub dry: bool,
 }
 
@@ -92,9 +115,9 @@ pub enum KeyDuration {
     Minute,
 }
 
-impl Into<Duration> for KeyDuration {
-    fn into(self) -> Duration {
-        match self {
+impl From<KeyDuration> for Duration {
+    fn from(val: KeyDuration) -> Self {
+        match val {
             KeyDuration::Day => Duration::days(1),
             KeyDuration::Minute => Duration::minutes(1),
         }
@@ -133,6 +156,7 @@ struct SshKey {
     public_key: String,
     #[serde(deserialize_with = "ensure_newline_secretstring")]
     private_key: SecretString,
+    #[allow(dead_code)] // present in API response but unused (gen is deprecated)
     expire_time: String,
 }
 
@@ -204,7 +228,10 @@ where
 }
 
 fn redact_private_key(s: &str) -> String {
-    let re = regex::Regex::new(r"(?s)(-----BEGIN [A-Z ]+PRIVATE KEY-----).*?(-----END [A-Z ]+PRIVATE KEY-----)").unwrap();
+    let re = regex::Regex::new(
+        r"(?s)(-----BEGIN [A-Z ]+PRIVATE KEY-----).*?(-----END [A-Z ]+PRIVATE KEY-----)",
+    )
+    .unwrap();
     re.replace_all(s, "[REDACTED PRIVATE KEY]").to_string()
 }
 
@@ -212,11 +239,11 @@ pub fn run(command: &Commands, config: &Config) -> anyhow::Result<()> {
     trace!("{} entrypoint", env!("CARGO_PKG_NAME"));
     trace!("{:?}", config);
     match command {
-        Commands::Gen(args) => download_key(&config, args)?,
-        Commands::Sign(args) => sign_key(&config, args)?,
-        Commands::Status => status_key(&config)?,
-        Commands::List(args) => list_keys(&config, args)?,
-        Commands::Revoke(args) => revoke_keys(&config, args)?,
+        Commands::Gen(args) => download_key(config, args)?,
+        Commands::Sign(args) => sign_key(config, args)?,
+        Commands::Status => status_key(config)?,
+        Commands::List(args) => list_keys(config, args)?,
+        Commands::Revoke(args) => revoke_keys(config, args)?,
         Commands::Completion(args) => generate_completion(args)?,
     }
 
@@ -231,7 +258,7 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
         duration: args.duration.unwrap_or(config.key_validity),
     };
 
-    let access_token = get_access_token(&config)?;
+    let access_token = get_access_token(config)?;
 
     let client = reqwest::blocking::Client::builder()
         .user_agent(http::user_agent())
@@ -240,7 +267,8 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
         .build()
         .context("Failed to initialize HTTP client.")?;
 
-    let response = client.post(config.env.keys_url.clone())
+    let response = client
+        .post(config.env.keys_url.clone())
         .bearer_auth(&access_token)
         .json(&key_duration)
         .send()
@@ -250,19 +278,18 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     let response_bytes = response.bytes()?;
 
     if !status.is_success() {
-        let error_response_struct: SshserviceErrorResponse = serde_json::from_slice(&response_bytes)?;
+        let error_response_struct: SshserviceErrorResponse =
+            serde_json::from_slice(&response_bytes)?;
         bail!("{}", error_response_struct.message);
     }
 
     let response_struct: SshserviceSuccessResponse = serde_json::from_slice(&response_bytes)
-        .with_context(||
+        .with_context(|| {
             format!(
                 "Failed to parse the respons form SSH service. Response body: {:?}",
-                redact_private_key(
-                    &String::from_utf8_lossy(&response_bytes)
-                )
+                redact_private_key(&String::from_utf8_lossy(&response_bytes))
             )
-        )?;
+        })?;
     trace!("Parsed SSH service response: {:?}", response_struct);
 
     //let private_key_path = args.file.clone();
@@ -279,13 +306,19 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     public_file.write_all(response_struct.ssh_key.public_key.as_bytes())?;
     #[cfg(unix)] // Only apply on Unix-like systems
     {
-        debug!("Setting permissions for public key to 0o644: {}", public_key_path.display());
+        debug!(
+            "Setting permissions for public key to 0o644: {}",
+            public_key_path.display()
+        );
         use std::os::unix::fs::PermissionsExt;
         let mut permissions = public_file.metadata()?.permissions();
         permissions.set_mode(0o644); // Read/write for owner only
         std::fs::set_permissions(&public_key_path, permissions)?;
     }
-    info!("Public SSH key successfully downloaded to {}", public_key_path.display());
+    info!(
+        "Public SSH key successfully downloaded to {}",
+        public_key_path.display()
+    );
 
     // Save private key with restricted permissions from creation
     debug!("Saving private key in {}", private_key_path.display());
@@ -301,8 +334,17 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     };
     #[cfg(not(unix))]
     let mut private_file = File::create(&private_key_path)?;
-    private_file.write_all(response_struct.ssh_key.private_key.expose_secret().as_bytes())?;
-    info!("Private SSH key successfully downloaded to: {}", private_key_path.display());
+    private_file.write_all(
+        response_struct
+            .ssh_key
+            .private_key
+            .expose_secret()
+            .as_bytes(),
+    )?;
+    info!(
+        "Private SSH key successfully downloaded to: {}",
+        private_key_path.display()
+    );
 
     Ok(())
 }
@@ -323,7 +365,7 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     };
     trace!("public_key: {:?}", serde_json::to_string(&public_key)?);
 
-    let access_token = get_access_token(&config)?;
+    let access_token = get_access_token(config)?;
 
     let client = reqwest::blocking::Client::builder()
         .user_agent(http::user_agent())
@@ -332,7 +374,8 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
         .build()
         .context("Failed to initialize HTTP client.")?;
 
-    let response = client.post(config.env.sign_url.clone())
+    let response = client
+        .post(config.env.sign_url.clone())
         .bearer_auth(&access_token)
         .json(&public_key)
         .send()
@@ -342,16 +385,18 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     let response_bytes = response.bytes()?;
 
     if !status.is_success() {
-        let error_response_struct: SshserviceErrorResponse = serde_json::from_slice(&response_bytes)?;
+        let error_response_struct: SshserviceErrorResponse =
+            serde_json::from_slice(&response_bytes)?;
         bail!("{}", error_response_struct.message);
     }
 
     let response_struct: SshserviceSuccessResponseCert = serde_json::from_slice(&response_bytes)
-        .with_context(||
+        .with_context(|| {
             format!(
                 "Failed to parse the respons form SSH service. Response body: {:?}",
                 String::from_utf8_lossy(&response_bytes)
-            ))?;
+            )
+        })?;
     trace!("Parsed SSH service response: {:?}", response_struct);
 
     let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
@@ -367,13 +412,19 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     public_file.write_all(response_struct.ssh_key.public_key.as_bytes())?;
     #[cfg(unix)] // Only apply on Unix-like systems
     {
-        debug!("Setting permissions for public key to 0o644: {}", public_key_path.display());
+        debug!(
+            "Setting permissions for public key to 0o644: {}",
+            public_key_path.display()
+        );
         use std::os::unix::fs::PermissionsExt;
         let mut permissions = public_file.metadata()?.permissions();
         permissions.set_mode(0o644); // Read/write for owner only
         std::fs::set_permissions(&public_key_path, permissions)?;
     }
-    info!("Public SSH certificate successfully downloaded to {}", public_key_path.display());
+    info!(
+        "Public SSH certificate successfully downloaded to {}",
+        public_key_path.display()
+    );
 
     Ok(())
 }
@@ -388,32 +439,47 @@ fn status_key(config: &Config) -> anyhow::Result<()> {
                 debug!("SSH key file found at: {}", &config.key_path.display());
                 meta
             } else {
-                bail!("Path '{}' exists but is not a file (it's a directory or other type).", &config.key_path.display());
+                bail!(
+                    "Path '{}' exists but is not a file (it's a directory or other type).",
+                    &config.key_path.display()
+                );
             }
-        },
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            bail!("SSH key file not found at: {}. Please run 'ssh-key download'.", &config.key_path.display());
-        },
+            bail!(
+                "SSH key file not found at: {}. Please run 'ssh-key download'.",
+                &config.key_path.display()
+            );
+        }
         Err(e) => {
-            bail!("Error accessing SSH key file at {}: {}", &config.key_path.display(), e);
+            bail!(
+                "Error accessing SSH key file at {}: {}",
+                &config.key_path.display(),
+                e
+            );
         }
     };
 
     trace!("{:?}", file_metadata);
     let modified_time = file_metadata.modified()?;
     let now = SystemTime::now();
-    let duration_since_modified = now.duration_since(modified_time)
+    let duration_since_modified = now
+        .duration_since(modified_time)
         .map_err(|e| anyhow!("System time is earlier than file modification time: {}", e))?;
 
     let validity: Duration = config.key_validity.into();
 
     if duration_since_modified > validity.to_std().unwrap() {
-        info!("SSH key is EXPIRED (last modified {} ago).",
-            format_duration(duration_since_modified));
+        info!(
+            "SSH key is EXPIRED (last modified {} ago).",
+            format_duration(duration_since_modified)
+        );
         bail!("SSH key is expired. Please run 'ssh-key download' to renew.");
     } else {
-        info!("SSH key is VALID (last modified {} ago).",
-            format_duration(duration_since_modified));
+        info!(
+            "SSH key is VALID (last modified {} ago).",
+            format_duration(duration_since_modified)
+        );
     }
 
     Ok(())
@@ -423,7 +489,7 @@ fn list_keys(config: &Config, args: &ListArgs) -> anyhow::Result<()> {
     trace!("list subcommand");
     trace!("{:?}", args);
 
-    let ssh_keys = list_keys_internal(&config, args.all)?;
+    let ssh_keys = list_keys_internal(config, args.all)?;
 
     let mut table = Table::new();
     if table.is_tty() {
@@ -442,9 +508,14 @@ fn list_keys(config: &Config, args: &ListArgs) -> anyhow::Result<()> {
         } else {
             "✅ VALID"
         };
-        let expiration = key.expire_time.clone() - Utc::now();
+        let expiration = key.expire_time - Utc::now();
 
-        table.add_row(vec![key.serial_number, valid.to_string(), HumanTime::from(expiration).to_string(), key.expire_time.with_timezone(&Local).to_string()]);
+        table.add_row(vec![
+            key.serial_number,
+            valid.to_string(),
+            HumanTime::from(expiration).to_string(),
+            key.expire_time.with_timezone(&Local).to_string(),
+        ]);
     }
     println!("{table}");
 
@@ -456,13 +527,13 @@ fn revoke_keys(config: &Config, args: &RevokeArgs) -> anyhow::Result<()> {
     trace!("{:?}", args);
 
     if args.all || (args.key_id.len() == 1 && args.key_id[0].to_lowercase() == "all") {
-        let ssh_keys = list_keys_internal(&config, false)?;
+        let ssh_keys = list_keys_internal(config, false)?;
         for key in ssh_keys {
-            revoke_key(&config, key.serial_number, args.dry)?;
+            revoke_key(config, key.serial_number, args.dry)?;
         }
     } else {
         for key in &args.key_id {
-            revoke_key(&config, key.to_string(), args.dry)?;
+            revoke_key(config, key.to_string(), args.dry)?;
         }
     }
 
@@ -476,7 +547,7 @@ fn list_keys_internal(config: &Config, all: bool) -> anyhow::Result<Vec<SshKeyCe
     };
     trace!("{:?}", list_keys);
 
-    let access_token = get_access_token(&config)?;
+    let access_token = get_access_token(config)?;
 
     let client = reqwest::blocking::Client::builder()
         .user_agent(http::user_agent())
@@ -485,7 +556,8 @@ fn list_keys_internal(config: &Config, all: bool) -> anyhow::Result<Vec<SshKeyCe
         .build()
         .context("Failed to initialize HTTP client.")?;
 
-    let response = client.get(config.env.keys_url.clone())
+    let response = client
+        .get(config.env.keys_url.clone())
         .bearer_auth(&access_token)
         .query(&list_keys)
         .send()
@@ -495,16 +567,18 @@ fn list_keys_internal(config: &Config, all: bool) -> anyhow::Result<Vec<SshKeyCe
     let response_bytes = response.bytes()?;
 
     if !status.is_success() {
-        let error_response_struct: SshserviceErrorResponse = serde_json::from_slice(&response_bytes)?;
+        let error_response_struct: SshserviceErrorResponse =
+            serde_json::from_slice(&response_bytes)?;
         bail!("{}", error_response_struct.message);
     }
 
     let response_struct: SshserviceSuccessResponseCerts = serde_json::from_slice(&response_bytes)
-        .with_context(||
-            format!(
-                "Failed to parse the respons form SSH service. Response body: {:?}",
-                String::from_utf8_lossy(&response_bytes)
-            ))?;
+        .with_context(|| {
+        format!(
+            "Failed to parse the respons form SSH service. Response body: {:?}",
+            String::from_utf8_lossy(&response_bytes)
+        )
+    })?;
 
     Ok(response_struct.ssh_keys)
 }
@@ -521,7 +595,7 @@ fn revoke_key(config: &Config, key_id: String, dry: bool) -> anyhow::Result<()> 
     };
     trace!("{:?}", revoke_key);
 
-    let access_token = get_access_token(&config)?;
+    let access_token = get_access_token(config)?;
 
     let client = reqwest::blocking::Client::builder()
         .user_agent(http::user_agent())
@@ -530,7 +604,8 @@ fn revoke_key(config: &Config, key_id: String, dry: bool) -> anyhow::Result<()> 
         .build()
         .context("Failed to initialize HTTP client.")?;
 
-    let response = client.put(config.env.revoke_url.clone())
+    let response = client
+        .put(config.env.revoke_url.clone())
         .bearer_auth(&access_token)
         .json(&revoke_key)
         .send()
@@ -540,16 +615,18 @@ fn revoke_key(config: &Config, key_id: String, dry: bool) -> anyhow::Result<()> 
     let response_bytes = response.bytes()?;
 
     if !status.is_success() {
-        let error_response_struct: SshserviceErrorResponse = serde_json::from_slice(&response_bytes)?;
+        let error_response_struct: SshserviceErrorResponse =
+            serde_json::from_slice(&response_bytes)?;
         bail!("{}", error_response_struct.message);
     }
 
     let response_struct: SshserviceSuccessResponseRevoke = serde_json::from_slice(&response_bytes)
-        .with_context(||
+        .with_context(|| {
             format!(
                 "Failed to parse the respons form SSH service. Response body: {:?}",
                 String::from_utf8_lossy(&response_bytes)
-            ))?;
+            )
+        })?;
     trace!("Parsed SSH service response: {:?}", response_struct);
 
     let revoked = if response_struct.revoked {

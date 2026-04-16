@@ -1,25 +1,19 @@
 //use std::fs::{File, metadata};
-use std::io::Write;
-use reqwest;
+use anyhow::{Context, anyhow, bail};
+use chrono::{Duration, Utc};
+use log::{debug, info, trace};
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
-use secrecy::{SecretString, ExposeSecret};
-use anyhow::{anyhow, bail, Context};
-use chrono::{Utc, Duration};
-use log::{info, debug, trace};
+use std::io::Write;
 
 use crate::config::Config;
-use crate::state::{AppState, TokenStore};
 use crate::http;
+use crate::state::{AppState, TokenStore};
 
 use openidconnect::core::{CoreClient, CoreProviderMetadata, CoreResponseType};
 use openidconnect::{
-    AuthenticationFlow, AuthorizationCode, ClientId, IssuerUrl,
-    PkceCodeChallenge, RedirectUrl, Scope,
-    CsrfToken, Nonce,
-    OAuth2TokenResponse,
-    TokenResponse,
-    RefreshToken,
-    AccessTokenHash,
+    AccessTokenHash, AuthenticationFlow, AuthorizationCode, ClientId, CsrfToken, IssuerUrl, Nonce,
+    OAuth2TokenResponse, PkceCodeChallenge, RedirectUrl, RefreshToken, Scope, TokenResponse,
 };
 use std::io::{BufRead, BufReader};
 use std::net::TcpListener;
@@ -70,7 +64,10 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<String> {
                     return Ok(ret_access_token);
                 }
                 Err(e) => {
-                    debug!("Access token refresh failed: {}. Falling back to browser login.", e);
+                    debug!(
+                        "Access token refresh failed: {}. Falling back to browser login.",
+                        e
+                    );
                 }
             }
         }
@@ -111,7 +108,9 @@ fn refresh_access_token(config: &Config, refresh_token: &str) -> anyhow::Result<
     let id_token = token_response
         .id_token()
         .ok_or_else(|| anyhow!("Server did not return an ID token"))?;
-    let expires_in = token_response.expires_in().unwrap_or(std::time::Duration::ZERO);
+    let expires_in = token_response
+        .expires_in()
+        .unwrap_or(std::time::Duration::ZERO);
     let expiration = Utc::now() + Duration::from_std(expires_in).unwrap();
 
     Ok(TokenStore {
@@ -158,7 +157,10 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
     // Open the browser!
     if let Err(e) = webbrowser::open(auth_url.as_str()) {
         debug!("Failed to open browser automatically: {}", e);
-        info!("Browser window did not open automatically. Log in here :\n{}", auth_url);
+        info!(
+            "Browser window did not open automatically. Log in here :\n{}",
+            auth_url
+        );
     }
 
     // Simple listener
@@ -172,7 +174,8 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
     let url = Url::parse(&format!("http://localhost:8765{}", redirect_url))?;
 
     // Check CSRF: Unlikely on localhost, but better be careful
-    let returned_state = url.query_pairs()
+    let returned_state = url
+        .query_pairs()
         .find(|(k, _)| k == "state")
         .map(|(_, v)| v.into_owned())
         .context("No state found")?;
@@ -180,7 +183,8 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
         return Err(anyhow!("CSRF detected! State mismatch."));
     }
 
-    let code = url.query_pairs()
+    let code = url
+        .query_pairs()
         .find(|(key, _)| key == "code")
         .map(|(_, value)| value.into_owned())
         .context("No code found")?;
@@ -219,7 +223,9 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
         }
     }
 
-    let expires_in = token_response.expires_in().unwrap_or(std::time::Duration::ZERO);
+    let expires_in = token_response
+        .expires_in()
+        .unwrap_or(std::time::Duration::ZERO);
     let expiration = Utc::now() + Duration::from_std(expires_in).unwrap();
 
     Ok(TokenStore {
@@ -240,7 +246,8 @@ fn login_via_api_key(config: &Config, api_key: &str) -> anyhow::Result<TokenStor
         .build()
         .context("Failed to initialize HTTP client.")?;
 
-    let response = client.post(config.env.token_url.clone())
+    let response = client
+        .post(config.env.token_url.clone())
         .header("X-API-Key", api_key)
         .header("Content-Type", "application/json")
         .header("Accept", "application/json")
@@ -255,12 +262,13 @@ fn login_via_api_key(config: &Config, api_key: &str) -> anyhow::Result<TokenStor
         bail!("{}", error_response_struct.message);
     }
 
-    let response_struct: ApiKeyResponse = serde_json::from_slice(&response_bytes)
-        .with_context(||
+    let response_struct: ApiKeyResponse =
+        serde_json::from_slice(&response_bytes).with_context(|| {
             format!(
                 "Failed to parse the respons form Keycloak. Response body: {:?}",
                 String::from_utf8_lossy(&response_bytes)
-            ))?;
+            )
+        })?;
     trace!("Parsed Keycloak response: {:?}", response_struct);
 
     let expires_in = Duration::seconds(response_struct.expires_in);

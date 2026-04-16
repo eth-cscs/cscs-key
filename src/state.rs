@@ -1,11 +1,10 @@
-use std::path::PathBuf;
+use chrono::{DateTime, Duration, Utc};
 use directories::ProjectDirs;
-use std::fs;
-use serde::{Serialize, Deserialize};
-use serde_json;
-use chrono::{DateTime, Utc, Duration};
-use std::collections::HashMap;
 use log::debug;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct AppState {
@@ -66,8 +65,8 @@ impl AppState {
         let json = serde_json::to_string_pretty(self)?;
         #[cfg(unix)]
         {
-            use std::os::unix::fs::OpenOptionsExt;
             use std::io::Write;
+            use std::os::unix::fs::OpenOptionsExt;
             let mut file = fs::OpenOptions::new()
                 .write(true)
                 .create(true)
