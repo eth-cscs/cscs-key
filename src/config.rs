@@ -128,7 +128,8 @@ impl Default for RawConfig {
         Self {
             key_path: dirs::home_dir()
                 .expect("Could not determine home directory")
-                .join(".ssh/cscs-key"),
+                .join(".ssh")
+                .join("cscs-key"),
             key_validity: KeyDuration::Day,
             env: Environment::default(),
         }
