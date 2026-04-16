@@ -20,6 +20,7 @@ humantime = "2.3.0"
 log = "0.4.27"
 oauth2 = "5.0.0"
 openidconnect = { version = "4.0.1", features = ["reqwest-blocking"] }
+os_info = "3.14.0"
 regex = "1.12.3"
 reqwest = { version = "0.12.20", features = ["blocking", "json"] }
 secrecy = { version = "0.10.3", features = ["serde"] }
