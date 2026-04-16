@@ -30,6 +30,7 @@ pub enum Commands {
     /// The private key will be saved to the path specified in the config or -f/--file.
     /// Default private key path is ~/.ssh/cscs-key.
     /// The public key certificate will be saved the same path with '-cert.pub' suffix.
+    #[clap(hide = true)]
     Gen(GenArgs),
     /// Sign an existing SSH public key
     ///

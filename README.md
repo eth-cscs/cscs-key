@@ -1,99 +1,112 @@
 # CSCS-key
 
-CSCS-key is a command-line tool to manage SSH keys for the Swiss National Supercomputing Centre (CSCS). It allows users to add, remove, and list SSH keys associated with their CSCS account.
+CSCS-key is a command-line tool to manage SSH keys for the Swiss National Supercomputing Centre (CSCS). It allows users to sign, list, and revoke SSH keys associated with their CSCS account.
 
 ## Installation
 
-Download the latest release from the [GitHub repository](0https://github.com/cscs/cscs-key/releases) and unpack the archive. Move the `cscs-key` executable to a directory in your PATH.
+Download the latest release from the [GitHub releases page](https://github.com/eth-cscs/cscs-key/releases) and unpack the archive. Move the `cscs-key` executable to a directory in your PATH.
+
 ```bash
 tar -zxf cscs-key-<version>.tar.gz
+mv cscs-key ~/.local/bin/
 ```
 
-TODO brew, pip, ...
+## Build from source
 
-# Build from source
+Prerequisites: Rust and Cargo. Install via [rustup](https://rustup.rs/):
 
-Prerequisites:
-- Rust
-- Cargo
-
-You can install the prerequisites, e.g., using Homebrew on macOS:
 ```bash
-brew install rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-Clone the repository and build the project:
+Clone the repository and build:
+
 ```bash
-git clone TODO URL
+git clone https://github.com/eth-cscs/cscs-key.git
 cd cscs-key
 cargo build --release
 ```
 
+This produces a native binary on macOS and Windows. On Linux, see below for a more portable build.
+
+### Linux (MUSL static binary)
+
+A standard `cargo build` on Linux links against the system's glibc, which may be too new for older distributions. For a fully static binary that runs on any x86_64 Linux system, use [cross](https://github.com/cross-rs/cross), which requires Docker or Podman:
+
+```bash
+cargo install cross
+cross build --release --target x86_64-unknown-linux-musl
+```
+
+The resulting binary is at `target/x86_64-unknown-linux-musl/release/cscs-key`.
+
 ## Usage
 
-### Sign ssh key
+### Generate a local SSH key pair (first-time setup)
 
-To sign an SSH key, use the following command:
+`cscs-key sign` requires both a private key (`~/.ssh/cscs-key`) and its matching public key (`~/.ssh/cscs-key.pub`). If you only have the certificate (`~/.ssh/cscs-key-cert.pub`) or no key at all, generate a fresh pair first:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/cscs-key
+```
+
+### Sign an SSH key
+
+Sign the public key to obtain a certificate valid for CSCS systems:
+
 ```bash
 cscs-key sign
 ```
-The default key is `~/.ssh/cscs-key`. You can specify a different private key using the `-f, --file` option.
 
-The default duration of the signed key is 1 day. You can specify a different duration using the `-d, --duration` option. Possible values are `1d` or `1min`.
+The default key path is `~/.ssh/cscs-key`. Specify a different key with `-f, --file`.
 
-### Generate ssh key on the server (deprecated)
+The default certificate validity is 1 day. Override with `-d, --duration` (`1d` or `1min`).
 
-Generating the ssh key on the server is deprecated and will be removed in the future. It is recommended to generate the SSH key locally and then sign it using the `cscs-key sign` command.
+### List SSH keys
 
-To generate a new SSH key on the server, use the following command:
 ```bash
-cscs-key gen
-```
-The default key is `~/.ssh/cscs-key`. You can specify a different private key using the `-f, --file` option.
-
-The default duration of the signed key is 1 day. You can specify a different duration using the `-d, --duration` option. Possible values are `1d` or `1min`.
-
-### List ssh keys
-
-To list all valid SSH keys associated with your CSCS account, use the following command:
-```bash
+# List valid keys
 cscs-key list
-```
-Or with `-a, --all` to also show expired and revoked keys:
-```bash
+
+# Include expired and revoked keys
 cscs-key list -a
 ```
 
-### Revoke ssh key
+### Revoke SSH keys
 
-To revoke one or more SSH key, use the following command:
 ```bash
-cscs-key revoke <key_id> ...
-```
-Or to revoke all keys, use the `-a, --all` option:
-```bash
+# Revoke specific keys by serial number
+cscs-key revoke <serial_number> ...
+
+# Revoke all active keys
 cscs-key revoke -a
+
+# Dry run: show what would be revoked
+cscs-key revoke -a --dry
 ```
 
-### Generate completion script
-To generate a completion script for your shell, use the following command:
+### Generate shell completion
+
 ```bash
 cscs-key completion <shell>
 ```
-Replace `<shell>` with your shell. Possible values: `bash`, `zsh`, `fish`, `powershell`, or `elvish`.
 
-To automatically activate the completion when you start a new shell session, you can add the following line to your shell configuration file (e.g., `~/.bashrc` for bash):
+Supported shells: `bash`, `zsh`, `fish`, `powershell`, `elvish`.
+
+To enable completion on every shell start, add to your shell config (e.g. `~/.bashrc`):
+
 ```bash
-# Enable cscs-key completion
 source <(cscs-key completion bash)
 ```
 
 ## Authentication
 
-Users authenticate using the Open ID Connect (OIDC) protocol. The tool opens a web browser where the user authenticates with the CSCS credentials. After successful authentication, an access token is stored locally. This way users only need to authenticate about once per day.
+Users authenticate via OpenID Connect (OIDC). The tool opens a browser for login with CSCS credentials. The resulting token is cached locally so re-authentication is only needed about once per day.
 
-Service accounts used for example in CI/CD pipelines can authenticate using an API key. Export the API key as an environment variable `CSCS_API_KEY`:
+When using **Service accounts in CI/CD**: Set the `CSCS_API_KEY` environment variable to skip browser login:
+
 ```bash
-export CSCS_API_KEY=<your_api_key>
+export CSCS_API_KEY=<service_account_api_key>
 ```
-Pro tip: Use pipeline variables to securely store the API key in your CI/CD setup.
+
+Store the key in your pipeline's secret/variable store rather than in code.
