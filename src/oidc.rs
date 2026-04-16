@@ -9,6 +9,7 @@ use log::{info, debug, trace};
 
 use crate::config::Config;
 use crate::state::{AppState, TokenStore};
+use crate::http;
 
 use openidconnect::core::{CoreClient, CoreProviderMetadata, CoreResponseType};
 use openidconnect::{
@@ -88,6 +89,7 @@ fn refresh_access_token(config: &Config, refresh_token: &str) -> anyhow::Result<
     trace!("refresh access token");
 
     let http_client = reqwest::blocking::Client::builder()
+        .user_agent(http::user_agent())
         .connect_timeout(std::time::Duration::from_secs(5))
         .timeout(std::time::Duration::from_secs(10))
         .build()
@@ -125,6 +127,7 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
 
     // In 4.x, we create a reusable reqwest client first
     let http_client = reqwest::blocking::Client::builder()
+        .user_agent(http::user_agent())
         .redirect(reqwest::redirect::Policy::none()) // Recommended for OIDC security
         .build()?;
 
@@ -231,6 +234,7 @@ fn login_via_api_key(config: &Config, api_key: &str) -> anyhow::Result<TokenStor
     trace!("get access token using API key");
 
     let client = reqwest::blocking::Client::builder()
+        .user_agent(http::user_agent())
         .connect_timeout(std::time::Duration::from_secs(5))
         .timeout(std::time::Duration::from_secs(10))
         .build()

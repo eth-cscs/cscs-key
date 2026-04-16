@@ -20,6 +20,7 @@ use log::{info, debug, trace};
 use crate::config::Config;
 use crate::oidc::get_access_token;
 use crate::completion::{CompletionArgs, generate_completion};
+use crate::http;
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
@@ -233,6 +234,7 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     let access_token = get_access_token(&config)?;
 
     let client = reqwest::blocking::Client::builder()
+        .user_agent(http::user_agent())
         .connect_timeout(std::time::Duration::from_secs(5))
         .timeout(std::time::Duration::from_secs(10))
         .build()
@@ -324,6 +326,7 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     let access_token = get_access_token(&config)?;
 
     let client = reqwest::blocking::Client::builder()
+        .user_agent(http::user_agent())
         .connect_timeout(std::time::Duration::from_secs(5))
         .timeout(std::time::Duration::from_secs(10))
         .build()
@@ -476,6 +479,7 @@ fn list_keys_internal(config: &Config, all: bool) -> anyhow::Result<Vec<SshKeyCe
     let access_token = get_access_token(&config)?;
 
     let client = reqwest::blocking::Client::builder()
+        .user_agent(http::user_agent())
         .connect_timeout(std::time::Duration::from_secs(5))
         .timeout(std::time::Duration::from_secs(10))
         .build()
@@ -520,6 +524,7 @@ fn revoke_key(config: &Config, key_id: String, dry: bool) -> anyhow::Result<()> 
     let access_token = get_access_token(&config)?;
 
     let client = reqwest::blocking::Client::builder()
+        .user_agent(http::user_agent())
         .connect_timeout(std::time::Duration::from_secs(5))
         .timeout(std::time::Duration::from_secs(10))
         .build()
