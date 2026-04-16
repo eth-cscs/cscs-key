@@ -16,6 +16,8 @@ mv cscs-key ~/.local/bin/
 Prerequisites: Rust and Cargo. Install via [rustup](https://rustup.rs/):
 
 ```bash
+brew install rust
+# or
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
@@ -44,7 +46,7 @@ The resulting binary is at `target/x86_64-unknown-linux-musl/release/cscs-key`.
 
 ### Generate a local SSH key pair (first-time setup)
 
-`cscs-key sign` requires both a private key (`~/.ssh/cscs-key`) and its matching public key (`~/.ssh/cscs-key.pub`). If you only have the certificate (`~/.ssh/cscs-key-cert.pub`) or no key at all, generate a fresh pair first:
+`cscs-key sign` requires both a private key (`~/.ssh/cscs-key`) and its matching public key (`~/.ssh/cscs-key.pub`). If you do not have a fresh pair, generate a fresh one first:
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/cscs-key
