@@ -4,7 +4,7 @@ use std::fs::{File, metadata};
 use std::io::Write;
 use std::fmt::Debug;
 use std::time::SystemTime;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use reqwest;
 use serde::{Serialize, Deserialize, Deserializer};
 use secrecy::{SecretString, ExposeSecret};
@@ -225,72 +225,40 @@ pub fn run(command: &Commands, config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Derive the public key from the private key and write it to `public_key_path`.
-fn regenerate_public_key(private_key_path: &PathBuf, public_key_path: &PathBuf) -> anyhow::Result<()> {
-    let private_key = ssh_key::PrivateKey::read_openssh_file(private_key_path)
-        .with_context(|| format!("Failed to read private key at {}", private_key_path.display()))?;
-
-    let public_key_openssh = private_key.public_key().to_openssh()
-        .context("Failed to serialize public key to OpenSSH format")?;
-
-    let mut public_file = File::create(public_key_path)?;
-    public_file.write_all(public_key_openssh.as_bytes())?;
-    public_file.write_all(b"\n")?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut permissions = public_file.metadata()?.permissions();
-        permissions.set_mode(0o644);
-        std::fs::set_permissions(public_key_path, permissions)?;
-    }
-
-    info!("Public key regenerated at {}", public_key_path.display());
-    Ok(())
-}
-
-/// Ensure that the `.pub` file exists and matches the private key.
-///
-/// If the `.pub` file is missing or its fingerprint doesn't match the private
-/// key, regenerate it from the private key.
-fn ensure_public_key(private_key_path: &PathBuf) -> anyhow::Result<()> {
-    let public_key_path = PathBuf::from(format!("{}.pub", private_key_path.display()));
-
+fn verify_key_pair(private_key_path: &Path, public_key_path: &Path) -> anyhow::Result<()> {
     if !private_key_path.exists() {
         bail!(
-            "Private key not found at {}. Run 'cscs-key gen' first.",
+            "Private key not found at {}.\nGenerate a new key pair with: ssh-keygen -t ed25519 -f {}",
+            private_key_path.display(),
             private_key_path.display()
         );
     }
 
     if !public_key_path.exists() {
-        info!(
-            "Public key not found at {}. Regenerating from private key.",
-            public_key_path.display()
+        bail!(
+            "Public key not found at {}.\n\
+            This key was likely generated server-side (via 'cscs-key gen' or the older SSH service tool) and should be replaced with a locally generated key pair.\n\
+            Generate a new key pair with: ssh-keygen -t ed25519 -f {}",
+            public_key_path.display(),
+            private_key_path.display()
         );
-        regenerate_public_key(private_key_path, &public_key_path)?;
-        return Ok(());
     }
 
-    // Both files exist, compare fingerprints
     let private_key = ssh_key::PrivateKey::read_openssh_file(private_key_path)
         .with_context(|| format!("Failed to read private key at {}", private_key_path.display()))?;
-    let priv_fp = private_key.fingerprint(ssh_key::HashAlg::Sha256);
-
-    let public_key_content = fs::read_to_string(&public_key_path)
+    let public_key_content = fs::read_to_string(public_key_path)
         .with_context(|| format!("Failed to read public key at {}", public_key_path.display()))?;
     let public_key = ssh_key::PublicKey::from_openssh(&public_key_content)
         .with_context(|| format!("Failed to parse public key at {}", public_key_path.display()))?;
-    let pub_fp = public_key.fingerprint(ssh_key::HashAlg::Sha256);
 
-    if priv_fp != pub_fp {
-        info!(
-            "Fingerprint mismatch between {} and {}. Regenerating public key.",
+    if private_key.fingerprint(ssh_key::HashAlg::Sha256) != public_key.fingerprint(ssh_key::HashAlg::Sha256) {
+        bail!(
+            "Public key at {} does not match private key at {}.\n\
+            Generate a new key pair with: ssh-keygen -t ed25519 -f {}",
+            public_key_path.display(),
             private_key_path.display(),
-            public_key_path.display()
+            private_key_path.display()
         );
-        debug!("Private key fingerprint: {}", priv_fp);
-        debug!("Public  key fingerprint: {}", pub_fp);
-        regenerate_public_key(private_key_path, &public_key_path)?;
     }
 
     Ok(())
@@ -389,8 +357,6 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     private_file.write_all(response_struct.ssh_key.private_key.expose_secret().as_bytes())?;
     info!("Private SSH key successfully downloaded to: {}", private_key_path.display());
 
-    ensure_public_key(&private_key_path)?;
-
     Ok(())
 }
 
@@ -399,10 +365,10 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     trace!("{:?}", args);
 
     let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
-
-    ensure_public_key(&private_key_path)?;
-
     let public_key_path = PathBuf::from(format!("{}.pub", private_key_path.display()));
+
+    verify_key_pair(&private_key_path, &public_key_path)?;
+
     debug!("Reading public key in {}", public_key_path.display());
     let content = fs::read_to_string(public_key_path)?;
 
