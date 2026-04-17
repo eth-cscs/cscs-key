@@ -55,7 +55,8 @@ impl Environment {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct RawConfig {
     pub key_path: PathBuf,
-    pub key_validity: KeyDuration,
+    #[serde(default)]
+    pub key_validity: Option<KeyDuration>,
     #[serde(default)]
     pub env: Environment,
 }
@@ -63,7 +64,7 @@ pub struct RawConfig {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
     pub key_path: PathBuf,
-    pub key_validity: KeyDuration,
+    pub key_validity: Option<KeyDuration>,
     pub env: EnvConfig,
 }
 
@@ -130,7 +131,7 @@ impl Default for RawConfig {
                 .expect("Could not determine home directory")
                 .join(".ssh")
                 .join("cscs-key"),
-            key_validity: KeyDuration::Day,
+            key_validity: None,
             env: Environment::default(),
         }
     }

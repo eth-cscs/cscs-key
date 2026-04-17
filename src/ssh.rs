@@ -53,7 +53,7 @@ pub enum Commands {
 pub struct GenArgs {
     #[arg(short, long, help = "Path to save the private SSH key. Default is ~/.ssh/cscs-key")]
     pub file: Option<PathBuf>,
-    #[arg(short, long, help = "Validity duration for the SSH key: '1d' (default) or '1min'")]
+    #[arg(short, long, help = "Validity duration for the SSH key: '1d' or '1min'")]
     pub duration: Option<KeyDuration>,
     #[arg(short, long, help = "Overwrite existing private key without asking")]
     pub yes: bool,
@@ -63,7 +63,7 @@ pub struct GenArgs {
 pub struct SignArgs {
     #[arg(short, long, help = "Path to save the private SSH key. Default is ~/.ssh/cscs-key")]
     pub file: Option<PathBuf>,
-    #[arg(short, long, help = "Validity duration for the SSH key: '1d' (default) or '1min'")]
+    #[arg(short, long, help = "Validity duration for the SSH key: '1d' or '1min'")]
     pub duration: Option<KeyDuration>,
 }
 
@@ -83,9 +83,8 @@ pub struct RevokeArgs {
     pub dry: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, Copy, Default, ValueEnum)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, ValueEnum)]
 pub enum KeyDuration {
-    #[default]
     #[serde(rename = "1d")]
     #[clap(name = "1d")]
     Day,
@@ -105,14 +104,16 @@ impl Into<Duration> for KeyDuration {
 
 #[derive(Debug, Serialize)]
 struct SshKeyDuration {
-    duration: KeyDuration,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    duration: Option<KeyDuration>,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PublicKey {
     public_key: String,
-    duration: KeyDuration,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    duration: Option<KeyDuration>,
 }
 
 #[derive(Debug, Serialize)]
@@ -269,7 +270,7 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     trace!("{:?}", args);
 
     let key_duration = SshKeyDuration {
-        duration: args.duration.unwrap_or(config.key_validity),
+        duration: args.duration.or(config.key_validity),
     };
 
     let access_token = get_access_token(&config)?;
@@ -371,7 +372,7 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
 
     let public_key = PublicKey {
         public_key: content,
-        duration: args.duration.unwrap_or(config.key_validity),
+        duration: args.duration.or(config.key_validity),
     };
     trace!("public_key: {:?}", serde_json::to_string(&public_key)?);
 
@@ -454,7 +455,7 @@ fn status_key(config: &Config) -> anyhow::Result<()> {
     let duration_since_modified = now.duration_since(modified_time)
         .map_err(|e| anyhow!("System time is earlier than file modification time: {}", e))?;
 
-    let validity: Duration = config.key_validity.into();
+    let validity: Duration = config.key_validity.unwrap_or(KeyDuration::Day).into();
 
     if duration_since_modified > validity.to_std().unwrap() {
         info!("SSH key is EXPIRED (last modified {} ago).",
