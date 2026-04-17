@@ -6,6 +6,8 @@ use secrecy::{SecretString, ExposeSecret};
 use anyhow::{anyhow, bail, Context};
 use chrono::{Utc, Duration};
 use log::{info, debug, trace};
+use qrcode::QrCode;
+use qrcode::render::unicode;
 
 use crate::config::Config;
 use crate::state::{AppState, TokenStore};
@@ -36,6 +38,30 @@ struct ApiKeyResponse {
 #[serde(rename_all = "camelCase")]
 struct ApiKeyErrorResponse {
     message: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct DeviceAuthResponse {
+    device_code: String,
+    user_code: String,
+    verification_uri: String,
+    verification_uri_complete: Option<String>,
+    expires_in: u64,
+    interval: Option<u64>,
+}
+
+#[derive(Deserialize, Debug)]
+struct DeviceTokenSuccess {
+    access_token: SecretString,
+    refresh_token: Option<SecretString>,
+    id_token: Option<SecretString>,
+    expires_in: Option<i64>,
+}
+
+#[derive(Deserialize, Debug)]
+struct OAuthError {
+    error: String,
+    error_description: Option<String>,
 }
 
 pub fn get_access_token(config: &Config) -> anyhow::Result<String> {
@@ -70,15 +96,20 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<String> {
                     return Ok(ret_access_token);
                 }
                 Err(e) => {
-                    debug!("Access token refresh failed: {}. Falling back to browser login.", e);
+                    debug!("Access token refresh failed: {}. Falling back to interactive login.", e);
                 }
             }
         }
     }
 
-    // Cache or refresh failed -> Browser login
-    debug!("Token does not exist in store or was not refreshed -> browser authentication.");
-    let new_token = login_via_browser(config)?;
+    // Cache or refresh failed -> interactive login
+    let new_token = if config.headless {
+        debug!("Headless mode enabled, using device authorization flow.");
+        login_via_device_code(config)?
+    } else {
+        debug!("Token does not exist in store or was not refreshed -> browser authentication.");
+        login_via_browser(config)?
+    };
     let ret_access_token = new_token.access_token.clone();
     state.oidc_token = Some(new_token);
     state.save()?;
@@ -224,6 +255,148 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
         id_token: Some(id_token.to_string()),
         expiration: Some(expiration),
     })
+}
+
+fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
+    trace!("login via device code");
+
+    let http_client = http::client_builder()
+        .build()
+        .context("Failed to initialize HTTP client.")?;
+
+    // Discover endpoints from OIDC well-known configuration
+    let well_known_url = format!("{}/.well-known/openid-configuration", config.env.issuer_url);
+    let discovery: serde_json::Value = http_client
+        .get(&well_known_url)
+        .send()
+        .context("Failed to fetch OIDC discovery document.")?
+        .json()
+        .context("Failed to parse OIDC discovery document.")?;
+
+    let device_auth_endpoint = discovery["device_authorization_endpoint"]
+        .as_str()
+        .ok_or_else(|| anyhow!(
+            "Device authorization is not enabled on this server. \
+             Please contact the administrator to enable it, or authenticate \
+             locally and copy the token cache to this machine."
+        ))?;
+
+    let token_endpoint = discovery["token_endpoint"]
+        .as_str()
+        .ok_or_else(|| anyhow!("Token endpoint not found in OIDC discovery document."))?;
+
+    // Request device code
+    let response = http_client
+        .post(device_auth_endpoint)
+        .form(&[
+            ("client_id", config.env.pkce_client_id.as_str()),
+            ("scope", "openid"),
+        ])
+        .send()
+        .context("Failed to request device authorization code.")?;
+
+    if !response.status().is_success() {
+        let err: OAuthError = response.json()
+            .context("Failed to parse device authorization error response.")?;
+        bail!("{}", err.error_description.unwrap_or(err.error));
+    }
+
+    let device_auth: DeviceAuthResponse = response.json()
+        .context("Failed to parse device authorization response.")?;
+
+    // Display instructions to the user
+    eprintln!("To authenticate, open this URL in a browser:");
+    eprintln!();
+    eprintln!("  {}", device_auth.verification_uri);
+    eprintln!();
+    eprintln!("And enter the code: {}", device_auth.user_code);
+    if let Some(ref uri) = device_auth.verification_uri_complete {
+        eprintln!();
+        eprintln!("Or open this URL directly:");
+        eprintln!("  {}", uri);
+    }
+
+    let qr_url = device_auth.verification_uri_complete.as_deref()
+        .unwrap_or(&device_auth.verification_uri);
+    if let Ok(code) = QrCode::new(qr_url) {
+        let qr_string = code.render::<unicode::Dense1x2>()
+            .quiet_zone(false)
+            .module_dimensions(1, 1)
+            .build();
+        eprintln!();
+        eprintln!("Or scan this QR code:");
+        eprintln!("\n{}", qr_string);
+    }
+
+    info!("");
+    info!("Waiting for authentication...");
+
+    // Poll the token endpoint until the user completes authentication
+    let mut interval = std::time::Duration::from_secs(device_auth.interval.unwrap_or(5));
+    let deadline = std::time::Instant::now()
+        + std::time::Duration::from_secs(device_auth.expires_in);
+
+    loop {
+        std::thread::sleep(interval);
+
+        if std::time::Instant::now() > deadline {
+            bail!("Device authorization expired. Please try again.");
+        }
+
+        let response = http_client
+            .post(token_endpoint)
+            .form(&[
+                ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
+                ("client_id", config.env.pkce_client_id.as_str()),
+                ("device_code", device_auth.device_code.as_str()),
+            ])
+            .send()
+            .context("Failed to poll for token.")?;
+
+        let status = response.status();
+        let response_bytes = response.bytes()?;
+
+        if status.is_success() {
+            let token: DeviceTokenSuccess = serde_json::from_slice(&response_bytes)
+                .context("Failed to parse token response.")?;
+
+            let expires_in = token.expires_in.unwrap_or(0);
+            let expiration = Utc::now() + Duration::seconds(expires_in);
+
+            info!("Authentication successful!");
+
+            return Ok(TokenStore {
+                access_token: token.access_token.expose_secret().to_string(),
+                refresh_token: token.refresh_token.map(|t| t.expose_secret().to_string()),
+                id_token: token.id_token.map(|t| t.expose_secret().to_string()),
+                expiration: Some(expiration),
+            });
+        }
+
+        let err: OAuthError = serde_json::from_slice(&response_bytes)
+            .with_context(|| format!(
+                "Failed to parse device token error response: {:?}",
+                String::from_utf8_lossy(&response_bytes)
+            ))?;
+
+        match err.error.as_str() {
+            "authorization_pending" => {
+                trace!("Authorization pending, continuing to poll...");
+                continue;
+            }
+            "slow_down" => {
+                interval += std::time::Duration::from_secs(5);
+                debug!("Server requested slow down, polling interval now {:?}.", interval);
+                continue;
+            }
+            "expired_token" => bail!("Device code expired. Please try again."),
+            "access_denied" => bail!("Authorization was denied."),
+            _ => bail!(
+                "Authentication error: {}",
+                err.error_description.unwrap_or(err.error)
+            ),
+        }
+    }
 }
 
 fn login_via_api_key(config: &Config, api_key: &str) -> anyhow::Result<TokenStore> {

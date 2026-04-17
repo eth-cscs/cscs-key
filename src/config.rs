@@ -58,6 +58,8 @@ pub struct RawConfig {
     #[serde(default)]
     pub key_validity: Option<KeyDuration>,
     #[serde(default)]
+    pub headless: bool,
+    #[serde(default)]
     pub env: Environment,
 }
 
@@ -65,6 +67,7 @@ pub struct RawConfig {
 pub struct Config {
     pub key_path: PathBuf,
     pub key_validity: Option<KeyDuration>,
+    pub headless: bool,
     pub env: EnvConfig,
 }
 
@@ -109,6 +112,7 @@ impl Config {
         Ok(Self {
             key_path: raw_config.key_path,
             key_validity: raw_config.key_validity,
+            headless: raw_config.headless,
             env: active_env.to_config(),
         })
     }
@@ -122,6 +126,9 @@ pub struct ConfigCliOverride {
     #[arg(long, global = true, hide = true)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key_validity: Option<KeyDuration>,
+    #[arg(long, global = true, num_args = 0, default_missing_value = "true", help = "Use device authorization flow instead of opening a browser")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub headless: Option<bool>,
 }
 
 impl Default for RawConfig {
@@ -132,6 +139,7 @@ impl Default for RawConfig {
                 .join(".ssh")
                 .join("cscs-key"),
             key_validity: None,
+            headless: false,
             env: Environment::default(),
         }
     }

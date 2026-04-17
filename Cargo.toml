@@ -22,6 +22,7 @@ log = "0.4.27"
 oauth2 = "5.0.0"
 openidconnect = { version = "4.0.1", features = ["reqwest-blocking"] }
 os_info = "3.14.0"
+qrcode = "0.14.1"
 regex = "1.12.3"
 secrecy = { version = "0.10.3", features = ["serde"] }
 serde = { version = "1.0.219", features = ["derive"] }
