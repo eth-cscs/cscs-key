@@ -88,10 +88,7 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<String> {
 fn refresh_access_token(config: &Config, refresh_token: &str) -> anyhow::Result<TokenStore> {
     trace!("refresh access token");
 
-    let http_client = reqwest::blocking::Client::builder()
-        .user_agent(http::user_agent())
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .timeout(std::time::Duration::from_secs(10))
+    let http_client = http::client_builder()
         .build()
         .context("Failed to initialize HTTP client.")?;
     let issuer_url = IssuerUrl::new(config.env.issuer_url.clone())?;
@@ -126,8 +123,7 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
     trace!("login via browser");
 
     // In 4.x, we create a reusable reqwest client first
-    let http_client = reqwest::blocking::Client::builder()
-        .user_agent(http::user_agent())
+    let http_client = http::client_builder()
         .redirect(reqwest::redirect::Policy::none()) // Recommended for OIDC security
         .build()?;
 
@@ -233,10 +229,7 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
 fn login_via_api_key(config: &Config, api_key: &str) -> anyhow::Result<TokenStore> {
     trace!("get access token using API key");
 
-    let client = reqwest::blocking::Client::builder()
-        .user_agent(http::user_agent())
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .timeout(std::time::Duration::from_secs(10))
+    let client = http::client_builder()
         .build()
         .context("Failed to initialize HTTP client.")?;
 
