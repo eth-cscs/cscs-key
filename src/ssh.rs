@@ -4,7 +4,7 @@ use std::fs::{File, metadata};
 use std::io::Write;
 use std::fmt::Debug;
 use std::time::SystemTime;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use reqwest;
 use serde::{Serialize, Deserialize, Deserializer};
 use secrecy::{SecretString, ExposeSecret};
@@ -56,6 +56,8 @@ pub struct GenArgs {
     pub file: Option<PathBuf>,
     #[arg(short, long, help = "Validity duration for the SSH key: '1d' (default) or '1min'")]
     pub duration: Option<KeyDuration>,
+    #[arg(short, long, help = "Overwrite existing private key without asking")]
+    pub yes: bool,
 }
 
 #[derive(Args, Debug)]
@@ -224,6 +226,45 @@ pub fn run(command: &Commands, config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn verify_key_pair(private_key_path: &Path, public_key_path: &Path) -> anyhow::Result<()> {
+    if !private_key_path.exists() {
+        bail!(
+            "Private key not found at {}.\nGenerate a new key pair with: ssh-keygen -t ed25519 -f {}",
+            private_key_path.display(),
+            private_key_path.display()
+        );
+    }
+
+    if !public_key_path.exists() {
+        bail!(
+            "Public key not found at {}.\n\
+            This key was likely generated server-side (via 'cscs-key gen' or the older SSH service tool) and should be replaced with a locally generated key pair.\n\
+            Generate a new key pair with: ssh-keygen -t ed25519 -f {}",
+            public_key_path.display(),
+            private_key_path.display()
+        );
+    }
+
+    let private_key = ssh_key::PrivateKey::read_openssh_file(private_key_path)
+        .with_context(|| format!("Failed to read private key at {}", private_key_path.display()))?;
+    let public_key_content = fs::read_to_string(public_key_path)
+        .with_context(|| format!("Failed to read public key at {}", public_key_path.display()))?;
+    let public_key = ssh_key::PublicKey::from_openssh(&public_key_content)
+        .with_context(|| format!("Failed to parse public key at {}", public_key_path.display()))?;
+
+    if private_key.fingerprint(ssh_key::HashAlg::Sha256) != public_key.fingerprint(ssh_key::HashAlg::Sha256) {
+        bail!(
+            "Public key at {} does not match private key at {}.\n\
+            Generate a new key pair with: ssh-keygen -t ed25519 -f {}",
+            public_key_path.display(),
+            private_key_path.display(),
+            private_key_path.display()
+        );
+    }
+
+    Ok(())
+}
+
 fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     trace!("gen subcommand");
     trace!("{:?}", args);
@@ -274,6 +315,18 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
         std::fs::create_dir_all(parent)?;
     }
 
+    // if we're overwriting an existing private file, we should probably ask the user
+    if private_key_path.exists() && !args.yes {
+        use dialoguer::Confirm;
+        let confirm = Confirm::new()
+            .with_prompt(format!("Private key already exists at {}. Overwrite?", private_key_path.display()))
+            .default(false)
+            .interact()?;
+        if !confirm {
+            bail!("Operation cancelled by user.");
+        }
+    }
+
     // Save public key
     let mut public_file = File::create(&public_key_path)?;
     debug!("Saving public key in {}", public_key_path.display());
@@ -312,9 +365,11 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     trace!("sign subcommand");
     trace!("{:?}", args);
 
-    //let private_key_path = args.file.clone();
     let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
     let public_key_path = PathBuf::from(format!("{}.pub", private_key_path.display()));
+
+    verify_key_pair(&private_key_path, &public_key_path)?;
+
     debug!("Reading public key in {}", public_key_path.display());
     let content = fs::read_to_string(public_key_path)?;
 
