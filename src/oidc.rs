@@ -90,6 +90,7 @@ fn refresh_access_token(config: &Config, refresh_token: &str) -> anyhow::Result<
 
     let http_client = reqwest::blocking::Client::builder()
         .user_agent(http::user_agent())
+        .default_headers(http::default_headers())
         .connect_timeout(std::time::Duration::from_secs(5))
         .timeout(std::time::Duration::from_secs(10))
         .build()
@@ -128,6 +129,7 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
     // In 4.x, we create a reusable reqwest client first
     let http_client = reqwest::blocking::Client::builder()
         .user_agent(http::user_agent())
+        .default_headers(http::default_headers())
         .redirect(reqwest::redirect::Policy::none()) // Recommended for OIDC security
         .build()?;
 
@@ -235,6 +237,7 @@ fn login_via_api_key(config: &Config, api_key: &str) -> anyhow::Result<TokenStor
 
     let client = reqwest::blocking::Client::builder()
         .user_agent(http::user_agent())
+        .default_headers(http::default_headers())
         .connect_timeout(std::time::Duration::from_secs(5))
         .timeout(std::time::Duration::from_secs(10))
         .build()
