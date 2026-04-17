@@ -260,10 +260,7 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
 fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
     trace!("login via device code");
 
-    let http_client = reqwest::blocking::Client::builder()
-        .user_agent(http::user_agent())
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .timeout(std::time::Duration::from_secs(10))
+    let http_client = http::client_builder()
         .build()
         .context("Failed to initialize HTTP client.")?;
 
