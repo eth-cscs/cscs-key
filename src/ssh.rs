@@ -5,7 +5,6 @@ use std::io::Write;
 use std::fmt::Debug;
 use std::time::SystemTime;
 use std::path::{Path, PathBuf};
-use reqwest;
 use serde::{Serialize, Deserialize, Deserializer};
 use secrecy::{SecretString, ExposeSecret};
 use anyhow::{anyhow, bail, Context};
@@ -275,11 +274,7 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
 
     let access_token = get_access_token(&config)?;
 
-    let client = reqwest::blocking::Client::builder()
-        .user_agent(http::user_agent())
-        .default_headers(http::default_headers())
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .timeout(std::time::Duration::from_secs(10))
+    let client = http::client_builder()
         .build()
         .context("Failed to initialize HTTP client.")?;
 
@@ -382,11 +377,7 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
 
     let access_token = get_access_token(&config)?;
 
-    let client = reqwest::blocking::Client::builder()
-        .user_agent(http::user_agent())
-        .default_headers(http::default_headers())
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .timeout(std::time::Duration::from_secs(10))
+    let client = http::client_builder()
         .build()
         .context("Failed to initialize HTTP client.")?;
 
@@ -536,11 +527,7 @@ fn list_keys_internal(config: &Config, all: bool) -> anyhow::Result<Vec<SshKeyCe
 
     let access_token = get_access_token(&config)?;
 
-    let client = reqwest::blocking::Client::builder()
-        .user_agent(http::user_agent())
-        .default_headers(http::default_headers())
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .timeout(std::time::Duration::from_secs(10))
+    let client = http::client_builder()
         .build()
         .context("Failed to initialize HTTP client.")?;
 
@@ -582,11 +569,7 @@ fn revoke_key(config: &Config, key_id: String, dry: bool) -> anyhow::Result<()> 
 
     let access_token = get_access_token(&config)?;
 
-    let client = reqwest::blocking::Client::builder()
-        .user_agent(http::user_agent())
-        .default_headers(http::default_headers())
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .timeout(std::time::Duration::from_secs(10))
+    let client = http::client_builder()
         .build()
         .context("Failed to initialize HTTP client.")?;
 
