@@ -305,15 +305,16 @@ fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
         .context("Failed to parse device authorization response.")?;
 
     // Display instructions to the user
-    eprintln!("To authenticate, open this URL in a browser:");
-    eprintln!();
-    eprintln!("  {}", device_auth.verification_uri);
-    eprintln!();
-    eprintln!("And enter the code: {}", device_auth.user_code);
     if let Some(ref uri) = device_auth.verification_uri_complete {
         eprintln!();
-        eprintln!("Or open this URL directly:");
+        eprintln!("To authenticate, open this URL in a browser:");
         eprintln!("  {}", uri);
+    } else {
+        eprintln!("To authenticate, open this URL in a browser:");
+        eprintln!();
+        eprintln!("  {}", device_auth.verification_uri);
+        eprintln!();
+        eprintln!("And enter the code: {}", device_auth.user_code);
     }
 
     let qr_url = device_auth.verification_uri_complete.as_deref()
