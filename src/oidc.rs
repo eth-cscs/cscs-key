@@ -366,9 +366,9 @@ fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
             info!("Authentication successful!");
 
             return Ok(TokenStore {
-                access_token: token.access_token.expose_secret().to_string(),
-                refresh_token: token.refresh_token.map(|t| t.expose_secret().to_string()),
-                id_token: token.id_token.map(|t| t.expose_secret().to_string()),
+                access_token: token.access_token,
+                refresh_token: token.refresh_token,
+                id_token: token.id_token,
                 expiration: Some(expiration),
             });
         }
