@@ -88,7 +88,7 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<SecretString> {
         // Token is expired, try to use the refresh token
         if let Some(refresh_token) = &token.refresh_token {
             debug!("Access token is expired, attempting refresh...");
-            match refresh_access_token(config, refresh_token.expose_secret()) {
+            match refresh_access_token(config, refresh_token) {
                 Ok(new_token) => {
                     let ret_access_token = new_token.access_token.clone();
                     state.oidc_token = Some(new_token);
@@ -116,7 +116,7 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<SecretString> {
     Ok(ret_access_token)
 }
 
-fn refresh_access_token(config: &Config, refresh_token: &str) -> anyhow::Result<TokenStore> {
+fn refresh_access_token(config: &Config, refresh_token: &SecretString) -> anyhow::Result<TokenStore> {
     trace!("refresh access token");
 
     let http_client = http::client_builder()
@@ -132,7 +132,7 @@ fn refresh_access_token(config: &Config, refresh_token: &str) -> anyhow::Result<
     );
 
     let token_response = client
-        .exchange_refresh_token(&RefreshToken::new(refresh_token.to_string()))?
+        .exchange_refresh_token(&RefreshToken::new(refresh_token.expose_secret().to_string()))?
         .request(&http_client)
         .context("Failed to exchange refresh token")?;
 
