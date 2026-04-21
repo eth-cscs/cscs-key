@@ -1,12 +1,12 @@
-use std::path::PathBuf;
+use chrono::{DateTime, Duration, Utc};
 use directories::ProjectDirs;
-use std::fs;
-use serde::{Serialize, Deserialize, Serializer};
-use secrecy::{SecretString, ExposeSecret};
-use serde_json;
-use chrono::{DateTime, Utc, Duration};
-use std::collections::HashMap;
 use log::debug;
+use secrecy::{ExposeSecret, SecretString};
+use serde::{Deserialize, Serialize, Serializer};
+use serde_json;
+use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct AppState {
@@ -21,7 +21,10 @@ where
     serializer.serialize_str(secret.expose_secret())
 }
 
-fn serialize_secret_option<S>(secret: &Option<SecretString>, serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_secret_option<S>(
+    secret: &Option<SecretString>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -87,8 +90,8 @@ impl AppState {
         let json = serde_json::to_string_pretty(self)?;
         #[cfg(unix)]
         {
-            use std::os::unix::fs::OpenOptionsExt;
             use std::io::Write;
+            use std::os::unix::fs::OpenOptionsExt;
             let mut file = fs::OpenOptions::new()
                 .write(true)
                 .create(true)

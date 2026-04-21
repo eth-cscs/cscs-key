@@ -1,15 +1,15 @@
 use clap::Parser;
-use clap_verbosity_flag::{Verbosity, InfoLevel};
+use clap_verbosity_flag::{InfoLevel, Verbosity};
 use std::io::Write;
 
 use crate::config::{ConfigCliOverride, Environment};
 
+mod completion;
 mod config;
-mod state;
+mod http;
 mod oidc;
 mod ssh;
-mod completion;
-mod http;
+mod state;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -31,9 +31,7 @@ fn main() -> anyhow::Result<()> {
         .filter_level(cli.verbose.log_level_filter())
         .filter_module("reqwest", log::LevelFilter::Warn) // Keep reqwest quiet
         .filter_module("openidconnect", log::LevelFilter::Warn) // Keep auth quiet
-        .format(|buf, record| {
-            writeln!(buf, "{}", record.args())
-        })
+        .format(|buf, record| writeln!(buf, "{}", record.args()))
         .init();
 
     let config = config::Config::load(cli.env, &cli.config_overrides)?;
