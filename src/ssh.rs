@@ -279,7 +279,7 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
         .context("Failed to initialize HTTP client.")?;
 
     let response = client.post(config.env.keys_url.clone())
-        .bearer_auth(&access_token)
+        .bearer_auth(access_token.expose_secret())
         .json(&key_duration)
         .send()
         .context("Failed to send request to the ssh service.")?;
@@ -382,7 +382,7 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
         .context("Failed to initialize HTTP client.")?;
 
     let response = client.post(config.env.sign_url.clone())
-        .bearer_auth(&access_token)
+        .bearer_auth(access_token.expose_secret())
         .json(&public_key)
         .send()
         .context("Failed to send request to the ssh service.")?;
@@ -532,7 +532,7 @@ fn list_keys_internal(config: &Config, all: bool) -> anyhow::Result<Vec<SshKeyCe
         .context("Failed to initialize HTTP client.")?;
 
     let response = client.get(config.env.keys_url.clone())
-        .bearer_auth(&access_token)
+        .bearer_auth(access_token.expose_secret())
         .query(&list_keys)
         .send()
         .context("Failed to send request to the ssh service.")?;
@@ -574,7 +574,7 @@ fn revoke_key(config: &Config, key_id: String, dry: bool) -> anyhow::Result<()> 
         .context("Failed to initialize HTTP client.")?;
 
     let response = client.put(config.env.revoke_url.clone())
-        .bearer_auth(&access_token)
+        .bearer_auth(access_token.expose_secret())
         .json(&revoke_key)
         .send()
         .context("Failed to send request to the ssh service.")?;

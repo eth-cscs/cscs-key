@@ -64,7 +64,7 @@ struct OAuthError {
     error_description: Option<String>,
 }
 
-pub fn get_access_token(config: &Config) -> anyhow::Result<String> {
+pub fn get_access_token(config: &Config) -> anyhow::Result<SecretString> {
     trace!("get access token");
 
     if let Ok(api_key) = std::env::var("CSCS_API_KEY") {
@@ -116,7 +116,7 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<String> {
     Ok(ret_access_token)
 }
 
-fn refresh_access_token(config: &Config, refresh_token: &str) -> anyhow::Result<TokenStore> {
+fn refresh_access_token(config: &Config, refresh_token: &SecretString) -> anyhow::Result<TokenStore> {
     trace!("refresh access token");
 
     let http_client = http::client_builder()
@@ -132,7 +132,7 @@ fn refresh_access_token(config: &Config, refresh_token: &str) -> anyhow::Result<
     );
 
     let token_response = client
-        .exchange_refresh_token(&RefreshToken::new(refresh_token.to_string()))?
+        .exchange_refresh_token(&RefreshToken::new(refresh_token.expose_secret().to_string()))?
         .request(&http_client)
         .context("Failed to exchange refresh token")?;
 
@@ -143,9 +143,9 @@ fn refresh_access_token(config: &Config, refresh_token: &str) -> anyhow::Result<
     let expiration = Utc::now() + Duration::from_std(expires_in).unwrap();
 
     Ok(TokenStore {
-        access_token: token_response.access_token().secret().to_string(),
-        refresh_token: Some(token_response.refresh_token().unwrap().secret().to_string()),
-        id_token: Some(id_token.to_string()),
+        access_token: token_response.access_token().secret().as_str().into(),
+        refresh_token: Some(token_response.refresh_token().unwrap().secret().as_str().into()),
+        id_token: Some(id_token.to_string().into()),
         expiration: Some(expiration),
     })
 }
@@ -250,9 +250,9 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
     let expiration = Utc::now() + Duration::from_std(expires_in).unwrap();
 
     Ok(TokenStore {
-        access_token: token_response.access_token().secret().to_string(),
-        refresh_token: Some(token_response.refresh_token().unwrap().secret().to_string()),
-        id_token: Some(id_token.to_string()),
+        access_token: token_response.access_token().secret().as_str().into(),
+        refresh_token: Some(token_response.refresh_token().unwrap().secret().as_str().into()),
+        id_token: Some(id_token.to_string().into()),
         expiration: Some(expiration),
     })
 }
@@ -367,9 +367,9 @@ fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
             info!("Authentication successful!");
 
             return Ok(TokenStore {
-                access_token: token.access_token.expose_secret().to_string(),
-                refresh_token: token.refresh_token.map(|t| t.expose_secret().to_string()),
-                id_token: token.id_token.map(|t| t.expose_secret().to_string()),
+                access_token: token.access_token,
+                refresh_token: token.refresh_token,
+                id_token: token.id_token,
                 expiration: Some(expiration),
             });
         }
@@ -434,9 +434,9 @@ fn login_via_api_key(config: &Config, api_key: &str) -> anyhow::Result<TokenStor
     let expiration = Utc::now() + expires_in;
 
     Ok(TokenStore {
-        access_token: response_struct.access_token.expose_secret().to_string(),
+        access_token: response_struct.access_token,
         refresh_token: None,
-        id_token: Some(response_struct.id_token.expose_secret().to_string()),
+        id_token: Some(response_struct.id_token),
         expiration: Some(expiration),
     })
 }

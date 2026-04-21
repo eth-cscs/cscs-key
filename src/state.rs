@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 use directories::ProjectDirs;
 use std::fs;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Serializer};
+use secrecy::{SecretString, ExposeSecret};
 use serde_json;
 use chrono::{DateTime, Utc, Duration};
 use std::collections::HashMap;
@@ -13,11 +14,31 @@ pub struct AppState {
     pub keys: Option<HashMap<PathBuf, CertMetadata>>,
 }
 
+fn serialize_secret<S>(secret: &SecretString, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(secret.expose_secret())
+}
+
+fn serialize_secret_option<S>(secret: &Option<SecretString>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match secret {
+        Some(s) => serializer.serialize_some(s.expose_secret()),
+        None => serializer.serialize_none(),
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TokenStore {
-    pub access_token: String,
-    pub refresh_token: Option<String>,
-    pub id_token: Option<String>,
+    #[serde(serialize_with = "serialize_secret")]
+    pub access_token: SecretString,
+    #[serde(serialize_with = "serialize_secret_option")]
+    pub refresh_token: Option<SecretString>,
+    #[serde(serialize_with = "serialize_secret_option")]
+    pub id_token: Option<SecretString>,
     pub expiration: Option<DateTime<Utc>>,
 }
 
