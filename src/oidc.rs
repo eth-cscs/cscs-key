@@ -4,7 +4,6 @@ use chrono::{Duration, Utc};
 use log::{debug, info, trace};
 use qrcode::QrCode;
 use qrcode::render::unicode;
-use reqwest;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use std::io::Write;

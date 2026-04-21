@@ -31,7 +31,7 @@ pub enum Environment {
 }
 
 impl Environment {
-    pub fn to_config(&self) -> EnvConfig {
+    pub fn to_config(self) -> EnvConfig {
         match self {
             Self::Prod => EnvConfig {
                 name: "prod".to_string(),

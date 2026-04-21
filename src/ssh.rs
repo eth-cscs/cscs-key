@@ -117,9 +117,9 @@ pub enum KeyDuration {
     Minute,
 }
 
-impl Into<Duration> for KeyDuration {
-    fn into(self) -> Duration {
-        match self {
+impl From<KeyDuration> for Duration {
+    fn from(val: KeyDuration) -> Self {
+        match val {
             KeyDuration::Day => Duration::days(1),
             KeyDuration::Minute => Duration::minutes(1),
         }
@@ -240,11 +240,11 @@ pub fn run(command: &Commands, config: &Config) -> anyhow::Result<()> {
     trace!("{} entrypoint", env!("CARGO_PKG_NAME"));
     trace!("{:?}", config);
     match command {
-        Commands::Gen(args) => download_key(&config, args)?,
-        Commands::Sign(args) => sign_key(&config, args)?,
-        Commands::Status => status_key(&config)?,
-        Commands::List(args) => list_keys(&config, args)?,
-        Commands::Revoke(args) => revoke_keys(&config, args)?,
+        Commands::Gen(args) => download_key(config, args)?,
+        Commands::Sign(args) => sign_key(config, args)?,
+        Commands::Status => status_key(config)?,
+        Commands::List(args) => list_keys(config, args)?,
+        Commands::Revoke(args) => revoke_keys(config, args)?,
         Commands::Completion(args) => generate_completion(args)?,
     }
 
@@ -309,7 +309,7 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
         duration: args.duration.unwrap_or(config.key_validity),
     };
 
-    let access_token = get_access_token(&config)?;
+    let access_token = get_access_token(config)?;
 
     let client = http::client_builder()
         .build()
@@ -430,7 +430,7 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     };
     trace!("public_key: {:?}", serde_json::to_string(&public_key)?);
 
-    let access_token = get_access_token(&config)?;
+    let access_token = get_access_token(config)?;
 
     let client = http::client_builder()
         .build()
@@ -551,7 +551,7 @@ fn list_keys(config: &Config, args: &ListArgs) -> anyhow::Result<()> {
     trace!("list subcommand");
     trace!("{:?}", args);
 
-    let ssh_keys = list_keys_internal(&config, args.all)?;
+    let ssh_keys = list_keys_internal(config, args.all)?;
 
     let mut table = Table::new();
     if table.is_tty() {
@@ -570,7 +570,7 @@ fn list_keys(config: &Config, args: &ListArgs) -> anyhow::Result<()> {
         } else {
             "✅ VALID"
         };
-        let expiration = key.expire_time.clone() - Utc::now();
+        let expiration = key.expire_time - Utc::now();
 
         table.add_row(vec![
             key.serial_number,
@@ -589,13 +589,13 @@ fn revoke_keys(config: &Config, args: &RevokeArgs) -> anyhow::Result<()> {
     trace!("{:?}", args);
 
     if args.all || (args.key_id.len() == 1 && args.key_id[0].to_lowercase() == "all") {
-        let ssh_keys = list_keys_internal(&config, false)?;
+        let ssh_keys = list_keys_internal(config, false)?;
         for key in ssh_keys {
-            revoke_key(&config, key.serial_number, args.dry)?;
+            revoke_key(config, key.serial_number, args.dry)?;
         }
     } else {
         for key in &args.key_id {
-            revoke_key(&config, key.to_string(), args.dry)?;
+            revoke_key(config, key.to_string(), args.dry)?;
         }
     }
 
@@ -609,7 +609,7 @@ fn list_keys_internal(config: &Config, all: bool) -> anyhow::Result<Vec<SshKeyCe
     };
     trace!("{:?}", list_keys);
 
-    let access_token = get_access_token(&config)?;
+    let access_token = get_access_token(config)?;
 
     let client = http::client_builder()
         .build()
@@ -654,7 +654,7 @@ fn revoke_key(config: &Config, key_id: String, dry: bool) -> anyhow::Result<()> 
     };
     trace!("{:?}", revoke_key);
 
-    let access_token = get_access_token(&config)?;
+    let access_token = get_access_token(config)?;
 
     let client = http::client_builder()
         .build()

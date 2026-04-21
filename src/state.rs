@@ -3,7 +3,6 @@ use directories::ProjectDirs;
 use log::debug;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize, Serializer};
-use serde_json;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
