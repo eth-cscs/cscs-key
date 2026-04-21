@@ -1,4 +1,3 @@
-//use std::fs::{File, metadata};
 use anyhow::{Context, anyhow, bail};
 use chrono::{Duration, Utc};
 use log::{debug, info, trace};
@@ -462,7 +461,7 @@ fn login_via_api_key(config: &Config, api_key: &str) -> anyhow::Result<TokenStor
     let response_struct: ApiKeyResponse =
         serde_json::from_slice(&response_bytes).with_context(|| {
             format!(
-                "Failed to parse the respons form Keycloak. Response body: {:?}",
+                "Failed to parse the response from Keycloak. Response body: {:?}",
                 String::from_utf8_lossy(&response_bytes)
             )
         })?;

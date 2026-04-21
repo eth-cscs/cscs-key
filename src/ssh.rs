@@ -334,13 +334,12 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     let response_struct: SshserviceSuccessResponse = serde_json::from_slice(&response_bytes)
         .with_context(|| {
             format!(
-                "Failed to parse the respons form SSH service. Response body: {:?}",
+                "Failed to parse the response from SSH service. Response body: {:?}",
                 redact_private_key(&String::from_utf8_lossy(&response_bytes))
             )
         })?;
     trace!("Parsed SSH service response: {:?}", response_struct);
 
-    //let private_key_path = args.file.clone();
     let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
     let public_key_path = PathBuf::from(format!("{}-cert.pub", private_key_path.display()));
 
@@ -455,7 +454,7 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     let response_struct: SshserviceSuccessResponseCert = serde_json::from_slice(&response_bytes)
         .with_context(|| {
             format!(
-                "Failed to parse the respons form SSH service. Response body: {:?}",
+                "Failed to parse the response from SSH service. Response body: {:?}",
                 String::from_utf8_lossy(&response_bytes)
             )
         })?;
@@ -634,7 +633,7 @@ fn list_keys_internal(config: &Config, all: bool) -> anyhow::Result<Vec<SshKeyCe
     let response_struct: SshserviceSuccessResponseCerts = serde_json::from_slice(&response_bytes)
         .with_context(|| {
         format!(
-            "Failed to parse the respons form SSH service. Response body: {:?}",
+            "Failed to parse the response from SSH service. Response body: {:?}",
             String::from_utf8_lossy(&response_bytes)
         )
     })?;
@@ -679,7 +678,7 @@ fn revoke_key(config: &Config, key_id: String, dry: bool) -> anyhow::Result<()> 
     let response_struct: SshserviceSuccessResponseRevoke = serde_json::from_slice(&response_bytes)
         .with_context(|| {
             format!(
-                "Failed to parse the respons form SSH service. Response body: {:?}",
+                "Failed to parse the response from SSH service. Response body: {:?}",
                 String::from_utf8_lossy(&response_bytes)
             )
         })?;
