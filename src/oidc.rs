@@ -147,14 +147,9 @@ fn refresh_access_token(
 
     Ok(TokenStore {
         access_token: token_response.access_token().secret().as_str().into(),
-        refresh_token: Some(
-            token_response
-                .refresh_token()
-                .unwrap()
-                .secret()
-                .as_str()
-                .into(),
-        ),
+        refresh_token: token_response
+            .refresh_token()
+            .map(|t| t.secret().as_str().into()),
         id_token: Some(id_token.to_string().into()),
         expiration: Some(expiration),
     })
@@ -268,14 +263,9 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
 
     Ok(TokenStore {
         access_token: token_response.access_token().secret().as_str().into(),
-        refresh_token: Some(
-            token_response
-                .refresh_token()
-                .unwrap()
-                .secret()
-                .as_str()
-                .into(),
-        ),
+        refresh_token: token_response
+            .refresh_token()
+            .map(|t| t.secret().as_str().into()),
         id_token: Some(id_token.to_string().into()),
         expiration: Some(expiration),
     })
