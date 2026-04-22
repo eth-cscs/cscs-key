@@ -76,6 +76,8 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<SecretString> {
         if !token.is_expired() {
             debug!("Access token is valid.");
             return Ok(token.access_token);
+        } else {
+            debug!("Access token is expired.");
         }
 
         // Token is expired, try to use the refresh token
@@ -95,6 +97,8 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<SecretString> {
                     );
                 }
             }
+        } else {
+            debug!("Refresh token does not exist, cannot refresh access token.");
         }
     }
 
@@ -103,7 +107,9 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<SecretString> {
         debug!("Headless mode enabled, using device authorization flow.");
         login_via_device_code(config)?
     } else {
-        debug!("Token does not exist in store or was not refreshed -> browser authentication.");
+        debug!(
+            "Access token does not exist in store or was not refreshed -> browser authentication."
+        );
         login_via_browser(config)?
     };
     let ret_access_token = new_token.access_token.clone();
