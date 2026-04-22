@@ -72,7 +72,7 @@ pub struct SignArgs {
     #[arg(
         short,
         long,
-        help = "Path to save the private SSH key. Default is ~/.ssh/cscs-key"
+        help = "Path to the private SSH key. Default is ~/.ssh/cscs-key"
     )]
     pub file: Option<PathBuf>,
     #[arg(
@@ -374,7 +374,7 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
         );
         use std::os::unix::fs::PermissionsExt;
         let mut permissions = public_file.metadata()?.permissions();
-        permissions.set_mode(0o644); // Read/write for owner only
+        permissions.set_mode(0o644); // Read/write for owner, read for group and others
         std::fs::set_permissions(&public_key_path, permissions)?;
     }
     info!(
@@ -479,7 +479,7 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
         );
         use std::os::unix::fs::PermissionsExt;
         let mut permissions = public_file.metadata()?.permissions();
-        permissions.set_mode(0o644); // Read/write for owner only
+        permissions.set_mode(0o644); // Read/write for owner, read for group and others
         std::fs::set_permissions(&public_key_path, permissions)?;
     }
     info!(
@@ -508,7 +508,8 @@ fn status_key(config: &Config) -> anyhow::Result<()> {
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             bail!(
-                "SSH key file not found at: {}. Please run 'ssh-key download'.",
+                "SSH key file not found at: {}. Please run 'ssh-keygen -t ed25519 -f {}' followed by 'cscs-key sign'.",
+                &config.key_path.display(),
                 &config.key_path.display()
             );
         }
@@ -535,7 +536,7 @@ fn status_key(config: &Config) -> anyhow::Result<()> {
             "SSH key is EXPIRED (last modified {} ago).",
             format_duration(duration_since_modified)
         );
-        bail!("SSH key is expired. Please run 'ssh-key download' to renew.");
+        bail!("SSH key is expired. Please run 'cscs-key sign' to renew.");
     } else {
         info!(
             "SSH key is VALID (last modified {} ago).",

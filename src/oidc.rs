@@ -191,7 +191,7 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
     if let Err(e) = webbrowser::open(auth_url.as_str()) {
         debug!("Failed to open browser automatically: {}", e);
         info!(
-            "Browser window did not open automatically. Log in here :\n{}",
+            "Browser window did not open automatically. Log in here:\n{}",
             auth_url
         );
     }
