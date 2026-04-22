@@ -1,27 +1,20 @@
-//use std::fs::{File, metadata};
-use std::io::Write;
-use reqwest;
-use serde::Deserialize;
-use secrecy::{SecretString, ExposeSecret};
-use anyhow::{anyhow, bail, Context};
-use chrono::{Utc, Duration};
-use log::{info, debug, trace};
+use anyhow::{Context, anyhow, bail};
+use chrono::{Duration, Utc};
+use log::{debug, info, trace};
 use qrcode::QrCode;
 use qrcode::render::unicode;
+use secrecy::{ExposeSecret, SecretString};
+use serde::Deserialize;
+use std::io::Write;
 
 use crate::config::Config;
-use crate::state::{AppState, TokenStore};
 use crate::http;
+use crate::state::{AppState, TokenStore};
 
 use openidconnect::core::{CoreClient, CoreProviderMetadata, CoreResponseType};
 use openidconnect::{
-    AuthenticationFlow, AuthorizationCode, ClientId, IssuerUrl,
-    PkceCodeChallenge, RedirectUrl, Scope,
-    CsrfToken, Nonce,
-    OAuth2TokenResponse,
-    TokenResponse,
-    RefreshToken,
-    AccessTokenHash,
+    AccessTokenHash, AuthenticationFlow, AuthorizationCode, ClientId, CsrfToken, IssuerUrl, Nonce,
+    OAuth2TokenResponse, PkceCodeChallenge, RedirectUrl, RefreshToken, Scope, TokenResponse,
 };
 use std::io::{BufRead, BufReader};
 use std::net::TcpListener;
@@ -83,6 +76,8 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<SecretString> {
         if !token.is_expired() {
             debug!("Access token is valid.");
             return Ok(token.access_token);
+        } else {
+            debug!("Access token is expired.");
         }
 
         // Token is expired, try to use the refresh token
@@ -96,9 +91,14 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<SecretString> {
                     return Ok(ret_access_token);
                 }
                 Err(e) => {
-                    debug!("Access token refresh failed: {}. Falling back to interactive login.", e);
+                    debug!(
+                        "Access token refresh failed: {}. Falling back to interactive login.",
+                        e
+                    );
                 }
             }
+        } else {
+            debug!("Refresh token does not exist, cannot refresh access token.");
         }
     }
 
@@ -107,7 +107,9 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<SecretString> {
         debug!("Headless mode enabled, using device authorization flow.");
         login_via_device_code(config)?
     } else {
-        debug!("Token does not exist in store or was not refreshed -> browser authentication.");
+        debug!(
+            "Access token does not exist in store or was not refreshed -> browser authentication."
+        );
         login_via_browser(config)?
     };
     let ret_access_token = new_token.access_token.clone();
@@ -116,7 +118,10 @@ pub fn get_access_token(config: &Config) -> anyhow::Result<SecretString> {
     Ok(ret_access_token)
 }
 
-fn refresh_access_token(config: &Config, refresh_token: &SecretString) -> anyhow::Result<TokenStore> {
+fn refresh_access_token(
+    config: &Config,
+    refresh_token: &SecretString,
+) -> anyhow::Result<TokenStore> {
     trace!("refresh access token");
 
     let http_client = http::client_builder()
@@ -132,19 +137,25 @@ fn refresh_access_token(config: &Config, refresh_token: &SecretString) -> anyhow
     );
 
     let token_response = client
-        .exchange_refresh_token(&RefreshToken::new(refresh_token.expose_secret().to_string()))?
+        .exchange_refresh_token(&RefreshToken::new(
+            refresh_token.expose_secret().to_string(),
+        ))?
         .request(&http_client)
         .context("Failed to exchange refresh token")?;
 
     let id_token = token_response
         .id_token()
         .ok_or_else(|| anyhow!("Server did not return an ID token"))?;
-    let expires_in = token_response.expires_in().unwrap_or(std::time::Duration::ZERO);
+    let expires_in = token_response
+        .expires_in()
+        .unwrap_or(std::time::Duration::ZERO);
     let expiration = Utc::now() + Duration::from_std(expires_in).unwrap();
 
     Ok(TokenStore {
         access_token: token_response.access_token().secret().as_str().into(),
-        refresh_token: Some(token_response.refresh_token().unwrap().secret().as_str().into()),
+        refresh_token: token_response
+            .refresh_token()
+            .map(|t| t.secret().as_str().into()),
         id_token: Some(id_token.to_string().into()),
         expiration: Some(expiration),
     })
@@ -185,7 +196,10 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
     // Open the browser!
     if let Err(e) = webbrowser::open(auth_url.as_str()) {
         debug!("Failed to open browser automatically: {}", e);
-        info!("Browser window did not open automatically. Log in here :\n{}", auth_url);
+        info!(
+            "Browser window did not open automatically. Log in here:\n{}",
+            auth_url
+        );
     }
 
     // Simple listener
@@ -199,7 +213,8 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
     let url = Url::parse(&format!("http://localhost:8765{}", redirect_url))?;
 
     // Check CSRF: Unlikely on localhost, but better be careful
-    let returned_state = url.query_pairs()
+    let returned_state = url
+        .query_pairs()
         .find(|(k, _)| k == "state")
         .map(|(_, v)| v.into_owned())
         .context("No state found")?;
@@ -207,7 +222,8 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
         return Err(anyhow!("CSRF detected! State mismatch."));
     }
 
-    let code = url.query_pairs()
+    let code = url
+        .query_pairs()
         .find(|(key, _)| key == "code")
         .map(|(_, value)| value.into_owned())
         .context("No code found")?;
@@ -246,12 +262,16 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
         }
     }
 
-    let expires_in = token_response.expires_in().unwrap_or(std::time::Duration::ZERO);
+    let expires_in = token_response
+        .expires_in()
+        .unwrap_or(std::time::Duration::ZERO);
     let expiration = Utc::now() + Duration::from_std(expires_in).unwrap();
 
     Ok(TokenStore {
         access_token: token_response.access_token().secret().as_str().into(),
-        refresh_token: Some(token_response.refresh_token().unwrap().secret().as_str().into()),
+        refresh_token: token_response
+            .refresh_token()
+            .map(|t| t.secret().as_str().into()),
         id_token: Some(id_token.to_string().into()),
         expiration: Some(expiration),
     })
@@ -275,11 +295,13 @@ fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
 
     let device_auth_endpoint = discovery["device_authorization_endpoint"]
         .as_str()
-        .ok_or_else(|| anyhow!(
-            "Device authorization is not enabled on this server. \
+        .ok_or_else(|| {
+            anyhow!(
+                "Device authorization is not enabled on this server. \
              Please contact the administrator to enable it, or authenticate \
              locally and copy the token cache to this machine."
-        ))?;
+            )
+        })?;
 
     let token_endpoint = discovery["token_endpoint"]
         .as_str()
@@ -296,12 +318,14 @@ fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
         .context("Failed to request device authorization code.")?;
 
     if !response.status().is_success() {
-        let err: OAuthError = response.json()
+        let err: OAuthError = response
+            .json()
             .context("Failed to parse device authorization error response.")?;
         bail!("{}", err.error_description.unwrap_or(err.error));
     }
 
-    let device_auth: DeviceAuthResponse = response.json()
+    let device_auth: DeviceAuthResponse = response
+        .json()
         .context("Failed to parse device authorization response.")?;
 
     // Display instructions to the user
@@ -317,10 +341,13 @@ fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
         eprintln!("And enter the code: {}", device_auth.user_code);
     }
 
-    let qr_url = device_auth.verification_uri_complete.as_deref()
+    let qr_url = device_auth
+        .verification_uri_complete
+        .as_deref()
         .unwrap_or(&device_auth.verification_uri);
     if let Ok(code) = QrCode::new(qr_url) {
-        let qr_string = code.render::<unicode::Dense1x2>()
+        let qr_string = code
+            .render::<unicode::Dense1x2>()
             .quiet_zone(false)
             .module_dimensions(1, 1)
             .build();
@@ -334,8 +361,8 @@ fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
 
     // Poll the token endpoint until the user completes authentication
     let mut interval = std::time::Duration::from_secs(device_auth.interval.unwrap_or(5));
-    let deadline = std::time::Instant::now()
-        + std::time::Duration::from_secs(device_auth.expires_in);
+    let deadline =
+        std::time::Instant::now() + std::time::Duration::from_secs(device_auth.expires_in);
 
     loop {
         std::thread::sleep(interval);
@@ -374,11 +401,12 @@ fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
             });
         }
 
-        let err: OAuthError = serde_json::from_slice(&response_bytes)
-            .with_context(|| format!(
+        let err: OAuthError = serde_json::from_slice(&response_bytes).with_context(|| {
+            format!(
                 "Failed to parse device token error response: {:?}",
                 String::from_utf8_lossy(&response_bytes)
-            ))?;
+            )
+        })?;
 
         match err.error.as_str() {
             "authorization_pending" => {
@@ -387,7 +415,10 @@ fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
             }
             "slow_down" => {
                 interval += std::time::Duration::from_secs(5);
-                debug!("Server requested slow down, polling interval now {:?}.", interval);
+                debug!(
+                    "Server requested slow down, polling interval now {:?}.",
+                    interval
+                );
                 continue;
             }
             "expired_token" => bail!("Device code expired. Please try again."),
@@ -407,7 +438,8 @@ fn login_via_api_key(config: &Config, api_key: &str) -> anyhow::Result<TokenStor
         .build()
         .context("Failed to initialize HTTP client.")?;
 
-    let response = client.post(config.env.token_url.clone())
+    let response = client
+        .post(config.env.token_url.clone())
         .header("X-API-Key", api_key)
         .header("Content-Type", "application/json")
         .header("Accept", "application/json")
@@ -422,12 +454,13 @@ fn login_via_api_key(config: &Config, api_key: &str) -> anyhow::Result<TokenStor
         bail!("{}", error_response_struct.message);
     }
 
-    let response_struct: ApiKeyResponse = serde_json::from_slice(&response_bytes)
-        .with_context(||
+    let response_struct: ApiKeyResponse =
+        serde_json::from_slice(&response_bytes).with_context(|| {
             format!(
-                "Failed to parse the respons form Keycloak. Response body: {:?}",
+                "Failed to parse the response from Keycloak. Response body: {:?}",
                 String::from_utf8_lossy(&response_bytes)
-            ))?;
+            )
+        })?;
     trace!("Parsed Keycloak response: {:?}", response_struct);
 
     let expires_in = Duration::seconds(response_struct.expires_in);
