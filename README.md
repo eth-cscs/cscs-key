@@ -103,9 +103,15 @@ source <(cscs-key completion bash)
 
 ## Authentication
 
-Users authenticate via OpenID Connect (OIDC). The tool opens a browser for login with CSCS credentials. The resulting token is cached locally so re-authentication is only needed about once per day.
+Users authenticate via OpenID Connect (OIDC). By default, the tool opens the default browser configured on the machine for login with CSCS credentials. The resulting token is cached locally so re-authentication is only needed about once per day.
 
-To use a specific browser for interactive login, pass `--browser`:
+For interactive login with the default browser, run:
+
+```bash
+cscs-key sign
+```
+
+To use a specific browser instead, pass `--browser`:
 
 ```bash
 cscs-key --browser firefox sign
@@ -120,3 +126,39 @@ export CSCS_API_KEY=<service_account_api_key>
 ```
 
 Store the key in your pipeline's secret/variable store rather than in code.
+
+## Configuration file
+
+`cscs-key` reads an optional TOML configuration file. Command-line arguments take precedence over values in the configuration file, and configuration file values take precedence over built-in defaults.
+
+The configuration file is named `config.toml` and is loaded from the platform-specific configuration directory:
+
+| Platform | Path |
+| --- | --- |
+| Linux | `$XDG_CONFIG_HOME/cscs-key/config.toml`, or `~/.config/cscs-key/config.toml` if `XDG_CONFIG_HOME` is not set |
+| macOS | `~/Library/Application Support/ch.cscs.cscs-key/config.toml` |
+| Windows | `%APPDATA%\cscs\cscs-key\config\config.toml` |
+
+Example:
+
+```toml
+key_path = "/path/to/ssh/key"
+key_validity = "1d"
+browser = "firefox"
+headless = false
+```
+
+Supported options:
+
+| Option | Values | Default |
+| --- | --- | --- |
+| `key_path` | Path to the private SSH key | `~/.ssh/cscs-key` |
+| `key_validity` | `1d`, `1min` | `1d` |
+| `browser` | `firefox`, `chrome`, `safari`, `edge`, `opera` | Use the system default browser |
+| `headless` | `true`, `false` | `false` |
+
+On Unix systems, the configuration file must not be writable by group or others. If needed, fix the permissions with:
+
+```bash
+chmod go-w /path/to/config.toml
+```
