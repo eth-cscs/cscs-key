@@ -105,6 +105,14 @@ source <(cscs-key completion bash)
 
 Users authenticate via OpenID Connect (OIDC). The tool opens a browser for login with CSCS credentials. The resulting token is cached locally so re-authentication is only needed about once per day.
 
+To use a specific browser for interactive login, pass `--browser`:
+
+```bash
+cscs-key --browser firefox sign
+```
+
+Supported values are `firefox`, `chrome`, `safari`, `edge`, and `opera`. You can also set `browser = "firefox"` in the config file.
+
 When using **Service accounts in CI/CD**: Set the `CSCS_API_KEY` environment variable to skip browser login:
 
 ```bash

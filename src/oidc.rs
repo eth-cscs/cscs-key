@@ -6,8 +6,9 @@ use qrcode::render::unicode;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use std::io::Write;
+use std::process::Command;
 
-use crate::config::Config;
+use crate::config::{Browser, Config};
 use crate::http;
 use crate::state::{AppState, TokenStore};
 
@@ -194,7 +195,7 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
         .url();
 
     // Open the browser!
-    if let Err(e) = webbrowser::open(auth_url.as_str()) {
+    if let Err(e) = open_auth_url(config.browser, auth_url.as_str()) {
         debug!("Failed to open browser automatically: {}", e);
         info!(
             "Browser window did not open automatically. Log in here:\n{}",
@@ -275,6 +276,52 @@ fn login_via_browser(config: &Config) -> anyhow::Result<TokenStore> {
         id_token: Some(id_token.to_string().into()),
         expiration: Some(expiration),
     })
+}
+
+fn open_auth_url(browser: Option<Browser>, url: &str) -> anyhow::Result<()> {
+    match browser {
+        None => webbrowser::open(url).context("Failed to open default browser"),
+        Some(Browser::Firefox) => open_webbrowser(webbrowser::Browser::Firefox, url),
+        Some(Browser::Chrome) => open_webbrowser(webbrowser::Browser::Chrome, url),
+        Some(Browser::Safari) => open_webbrowser(webbrowser::Browser::Safari, url),
+        Some(Browser::Opera) => open_webbrowser(webbrowser::Browser::Opera, url),
+        Some(Browser::Edge) => open_edge(url),
+    }
+}
+
+fn open_webbrowser(browser: webbrowser::Browser, url: &str) -> anyhow::Result<()> {
+    webbrowser::open_browser(browser, url)
+        .with_context(|| format!("Failed to open {browser} browser"))
+}
+
+fn open_edge(url: &str) -> anyhow::Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .args(["-a", "Microsoft Edge", url])
+            .spawn()
+            .context("Failed to open Microsoft Edge")?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(["/C", "start", "", "msedge", url])
+            .spawn()
+            .context("Failed to open Microsoft Edge")?;
+        return Ok(());
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        for command in ["microsoft-edge", "microsoft-edge-stable", "msedge"] {
+            if Command::new(command).arg(url).spawn().is_ok() {
+                return Ok(());
+            }
+        }
+        bail!("Failed to open Microsoft Edge");
+    }
 }
 
 fn login_via_device_code(config: &Config) -> anyhow::Result<TokenStore> {
