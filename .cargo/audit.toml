@@ -1,0 +1,9 @@
+[advisories]
+ignore = [
+    # RUSTSEC-2023-0071: Marvin Attack timing sidechannel in `rsa` crate (PKCS#1 v1.5 decryption).
+    # Not exploitable here: the `rsa` crate is pulled in only via `openidconnect`, which uses RSA
+    # for JWT signature verification with the IdP's public key — not private-key decryption.
+    # cscs-key holds no RSA private key and exposes no timing oracle (local CLI, not a network service).
+    # No upstream fix is available yet; revisit when the `rsa` crate ships a constant-time release.
+    "RUSTSEC-2023-0071",
+]

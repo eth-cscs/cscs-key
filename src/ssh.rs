@@ -9,6 +9,8 @@ use humantime::format_duration;
 use log::{debug, info, trace};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Deserializer, Serialize};
+#[cfg(unix)]
+use libc::O_NOFOLLOW;
 use std::fmt::Debug;
 use std::fs;
 use std::fs::{File, metadata};
@@ -301,6 +303,40 @@ fn verify_key_pair(private_key_path: &Path, public_key_path: &Path) -> anyhow::R
     Ok(())
 }
 
+/// Open a key file for writing, refusing to follow symlinks on Unix and
+/// enforcing the given mode on both newly created and pre-existing files.
+fn open_key_file(path: &Path, mode: u32) -> anyhow::Result<File> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(mode)
+            .custom_flags(O_NOFOLLOW)
+            .open(path)
+            .with_context(|| {
+                format!(
+                    "Failed to open {} for writing. \
+                    If this path is intentionally a symlink, pass --file pointing at the target.",
+                    path.display()
+                )
+            })?;
+        // OpenOptions::mode only applies at creation; enforce mode on pre-existing files too.
+        // Using the file handle invokes fchmod — no path lookup, no symlink-follow risk.
+        file.set_permissions(fs::Permissions::from_mode(mode))
+            .with_context(|| format!("Failed to set permissions on {}", path.display()))?;
+        Ok(file)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = mode;
+        File::create(path)
+            .with_context(|| format!("Failed to open {} for writing", path.display()))
+    }
+}
+
 fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     trace!("gen subcommand");
     trace!("{:?}", args);
@@ -363,39 +399,17 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     }
 
     // Save public key
-    let mut public_file = File::create(&public_key_path)?;
     debug!("Saving public key in {}", public_key_path.display());
+    let mut public_file = open_key_file(&public_key_path, 0o644)?;
     public_file.write_all(response_struct.ssh_key.public_key.as_bytes())?;
-    #[cfg(unix)] // Only apply on Unix-like systems
-    {
-        debug!(
-            "Setting permissions for public key to 0o644: {}",
-            public_key_path.display()
-        );
-        use std::os::unix::fs::PermissionsExt;
-        let mut permissions = public_file.metadata()?.permissions();
-        permissions.set_mode(0o644); // Read/write for owner, read for group and others
-        std::fs::set_permissions(&public_key_path, permissions)?;
-    }
     info!(
         "Public SSH key successfully downloaded to {}",
         public_key_path.display()
     );
 
-    // Save private key with restricted permissions from creation
+    // Save private key
     debug!("Saving private key in {}", private_key_path.display());
-    #[cfg(unix)]
-    let mut private_file = {
-        use std::os::unix::fs::OpenOptionsExt;
-        fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&private_key_path)?
-    };
-    #[cfg(not(unix))]
-    let mut private_file = File::create(&private_key_path)?;
+    let mut private_file = open_key_file(&private_key_path, 0o600)?;
     private_file.write_all(
         response_struct
             .ssh_key
@@ -468,20 +482,9 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     }
 
     // Save public key
-    let mut public_file = File::create(&public_key_path)?;
     debug!("Saving public key in {}", public_key_path.display());
+    let mut public_file = open_key_file(&public_key_path, 0o644)?;
     public_file.write_all(response_struct.ssh_key.public_key.as_bytes())?;
-    #[cfg(unix)] // Only apply on Unix-like systems
-    {
-        debug!(
-            "Setting permissions for public key to 0o644: {}",
-            public_key_path.display()
-        );
-        use std::os::unix::fs::PermissionsExt;
-        let mut permissions = public_file.metadata()?.permissions();
-        permissions.set_mode(0o644); // Read/write for owner, read for group and others
-        std::fs::set_permissions(&public_key_path, permissions)?;
-    }
     info!(
         "Public SSH certificate successfully downloaded to {}",
         public_key_path.display()
