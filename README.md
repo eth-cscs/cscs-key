@@ -24,9 +24,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 Clone the repository and build:
 
 ```bash
-git clone https://github.com/eth-cscs/cscs-key.git
-cd cscs-key
-cargo build --release
+cargo install --locked --git https://github.com/eth-cscs/cscs-key
 ```
 
 This produces a native binary on macOS and Windows. On Linux, see below for a more portable build.
