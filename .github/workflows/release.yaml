@@ -47,7 +47,7 @@ jobs:
         run: cargo install cross --locked
 
       - name: Build
-        run: ${{ matrix.use_cross && 'cross' || 'cargo' }} build --release --target ${{ matrix.target }}
+        run: ${{ matrix.use_cross && 'cross' || 'cargo' }} build --release --locked --target ${{ matrix.target }}
 
       - name: Package (Unix)
         if: runner.os != 'Windows'
