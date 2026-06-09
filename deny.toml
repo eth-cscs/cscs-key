@@ -1,4 +1,12 @@
+# cargo-deny configuration. Run: cargo deny check
+# https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+all-features = true
+
 [advisories]
+version = 2
+yanked = "deny"
 ignore = [
     # RUSTSEC-2023-0071: Marvin Attack timing sidechannel in `rsa` crate (PKCS#1 v1.5 decryption).
     # Not exploitable here: the `rsa` crate is pulled in only via `openidconnect`, which uses RSA
@@ -7,3 +15,23 @@ ignore = [
     # No upstream fix is available yet; revisit when the `rsa` crate ships a constant-time release.
     "RUSTSEC-2023-0071",
 ]
+
+[licenses]
+version = 2
+allow = [
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "Unicode-3.0",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

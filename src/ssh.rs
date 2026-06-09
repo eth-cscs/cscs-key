@@ -6,11 +6,11 @@ use comfy_table::Table;
 use comfy_table::modifiers::{UTF8_ROUND_CORNERS, UTF8_SOLID_INNER_BORDERS};
 use comfy_table::presets::{NOTHING, UTF8_FULL};
 use humantime::format_duration;
+#[cfg(unix)]
+use libc::O_NOFOLLOW;
 use log::{debug, info, trace};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Deserializer, Serialize};
-#[cfg(unix)]
-use libc::O_NOFOLLOW;
 use std::fmt::Debug;
 use std::fs;
 use std::fs::{File, metadata};
@@ -160,6 +160,7 @@ struct SshKey {
     public_key: String,
     #[serde(deserialize_with = "ensure_newline_secretstring")]
     private_key: SecretString,
+    #[allow(dead_code)]
     expire_time: String,
 }
 
@@ -332,8 +333,7 @@ fn open_key_file(path: &Path, mode: u32) -> anyhow::Result<File> {
     #[cfg(not(unix))]
     {
         let _ = mode;
-        File::create(path)
-            .with_context(|| format!("Failed to open {} for writing", path.display()))
+        File::create(path).with_context(|| format!("Failed to open {} for writing", path.display()))
     }
 }
 
