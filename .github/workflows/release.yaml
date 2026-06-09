@@ -71,9 +71,30 @@ jobs:
           name: ${{ matrix.target }}
           path: ${{ env.ASSET }}
 
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --locked
+
+      - name: Generate SBOM
+        run: cargo cyclonedx --format json --spec-version 1.5 --target all --override-filename cscs-key-${{ github.ref_name }}-sbom.cdx
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: cscs-key-${{ github.ref_name }}-sbom.cdx.json
+
   release:
     name: GitHub Release
-    needs: build
+    needs: [build, sbom]
     runs-on: ubuntu-latest
     permissions:
       contents: write
