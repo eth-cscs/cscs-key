@@ -6,7 +6,7 @@ license = "BSD-3-Clause"
 
 [dependencies]
 anyhow = "1.0.98"
-chrono = "0.4.43"
+chrono = "0.4.45"
 chrono-humanize = "0.2.3"
 clap = { version = "4.5.40", features = ["derive"] }
 clap-verbosity-flag = "3.0.4"
@@ -19,12 +19,12 @@ duration-str = "0.17.0"
 env_logger = "0.11.8"
 figment = { version = "0.10.19", features = ["toml"] }
 humantime = "2.3.0"
-log = "0.4.27"
+log = "0.4.32"
 oauth2 = "5.0.0"
 openidconnect = { version = "4.0.1", features = ["reqwest-blocking"] }
 os_info = "3.14.0"
 qrcode = "0.14.1"
-regex = "1.12.3"
+regex = "1.12.4"
 secrecy = { version = "0.10.3", features = ["serde"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.149"
