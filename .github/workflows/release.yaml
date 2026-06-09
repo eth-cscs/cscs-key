@@ -69,7 +69,7 @@ jobs:
           Compress-Archive -Path $bin -DestinationPath $archive
           "ASSET=$archive" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}
           path: ${{ env.ASSET }}
@@ -90,7 +90,7 @@ jobs:
       - name: Generate SBOM
         run: cargo cyclonedx --format json --spec-version 1.5 --target all --override-filename cscs-key-${{ github.ref_name }}-sbom.cdx
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: cscs-key-${{ github.ref_name }}-sbom.cdx.json
