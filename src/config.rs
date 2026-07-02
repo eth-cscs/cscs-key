@@ -11,6 +11,16 @@ use std::path::PathBuf;
 
 use crate::ssh::KeyDuration;
 
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum Browser {
+    Firefox,
+    Chrome,
+    Safari,
+    Edge,
+    Opera,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnvConfig {
     pub name: String,
@@ -72,6 +82,8 @@ pub struct RawConfig {
     pub key_path: PathBuf,
     pub key_validity: KeyDuration,
     #[serde(default)]
+    pub browser: Option<Browser>,
+    #[serde(default)]
     pub headless: bool,
     #[serde(default)]
     pub env: Environment,
@@ -81,6 +93,7 @@ pub struct RawConfig {
 pub struct Config {
     pub key_path: PathBuf,
     pub key_validity: KeyDuration,
+    pub browser: Option<Browser>,
     pub headless: bool,
     pub env: EnvConfig,
 }
@@ -132,6 +145,7 @@ impl Config {
         Ok(Self {
             key_path: raw_config.key_path,
             key_validity: raw_config.key_validity,
+            browser: raw_config.browser,
             headless: raw_config.headless,
             env: active_env.to_config(),
         })
@@ -146,6 +160,14 @@ pub struct ConfigCliOverride {
     #[arg(long, global = true, hide = true)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key_validity: Option<KeyDuration>,
+    #[arg(
+        long,
+        global = true,
+        value_enum,
+        help = "Browser to use for interactive authentication"
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub browser: Option<Browser>,
     #[arg(
         long,
         global = true,
@@ -165,6 +187,7 @@ impl Default for RawConfig {
                 .join(".ssh")
                 .join("cscs-key"),
             key_validity: KeyDuration::Day,
+            browser: None,
             headless: false,
             env: Environment::default(),
         }
