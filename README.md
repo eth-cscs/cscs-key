@@ -40,6 +40,41 @@ cross build --release --target x86_64-unknown-linux-musl
 
 The resulting binary is at `target/x86_64-unknown-linux-musl/release/cscs-key`.
 
+## Install with Nix
+
+With flakes enabled, run without installing:
+
+```bash
+nix run github:eth-cscs/cscs-key -- --help
+```
+
+Or install into your profile:
+
+```bash
+nix profile install github:eth-cscs/cscs-key
+```
+
+The flake exposes `packages.default`, an `apps.default` runner, and a
+`devShells.default` (Rust toolchain via [fenix](https://github.com/nix-community/fenix)
+plus `rust-analyzer`) for `nix develop`.
+
+Non-flake users can build via `default.nix`:
+
+```bash
+nix-build default.nix
+```
+
+Or reference the package from another Nix expression with `fetchFromGitHub`:
+
+```nix
+pkgs.callPackage (pkgs.fetchFromGitHub {
+  owner = "eth-cscs";
+  repo = "cscs-key";
+  rev = "<tag-or-commit>";
+  hash = "<sri-hash>";
+} + "/package.nix") { }
+```
+
 ## Usage
 
 ### Generate a local SSH key pair (first-time setup)

@@ -5,3 +5,8 @@
 .DS_Store
 
 /target
+
+# Nix
+/result
+/result-*
+.direnv
