@@ -500,26 +500,26 @@ fn status_key(config: &Config) -> anyhow::Result<()> {
     let file_metadata = match metadata_result {
         Ok(meta) => {
             if meta.is_file() {
-                debug!("SSH key file found at: {}", &config.key_path.display());
+                debug!("SSH key file found at: {}", config.key_path.display());
                 meta
             } else {
                 bail!(
                     "Path '{}' exists but is not a file (it's a directory or other type).",
-                    &config.key_path.display()
+                    config.key_path.display()
                 );
             }
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             bail!(
                 "SSH key file not found at: {}. Please run 'ssh-keygen -t ed25519 -f {}' followed by 'cscs-key sign'.",
-                &config.key_path.display(),
-                &config.key_path.display()
+                config.key_path.display(),
+                config.key_path.display()
             );
         }
         Err(e) => {
             bail!(
                 "Error accessing SSH key file at {}: {}",
-                &config.key_path.display(),
+                config.key_path.display(),
                 e
             );
         }
