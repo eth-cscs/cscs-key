@@ -11,7 +11,7 @@ chrono-humanize = "0.2.3"
 clap = { version = "4.5.40", features = ["derive"] }
 clap-verbosity-flag = "3.0.4"
 clap_complete = "4.6.0"
-comfy-table = "7.2.2"
+comfy-table = "8.0.1"
 dialoguer = "0.12.0"
 directories = "6.0.0"
 dirs = "6.0.0"
