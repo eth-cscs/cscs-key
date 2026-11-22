@@ -435,7 +435,7 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
     let public_key_path = PathBuf::from(format!("{}.pub", private_key_path.display()));
 
-    verify_key_pair(&private_key_path, &public_key_path)?;
+    verify_key_pair(&private_key_path, &public_key_path, args.force)?;
 
     debug!("Reading public key in {}", public_key_path.display());
     let content = fs::read_to_string(public_key_path)?;
