@@ -249,7 +249,7 @@ pub fn run(command: &Commands, config: &Config) -> anyhow::Result<()> {
 }
 
 fn verify_key_pair(private_key_path: &Path, public_key_path: &Path) -> anyhow::Result<()> {
-    if !private_key_path.exists() {
+    if !private_key_path.exists() && !force{
         bail!(
             "Private key not found at {}.\nGenerate a new key pair with: ssh-keygen -t ed25519 -f {}",
             private_key_path.display(),
@@ -266,6 +266,11 @@ fn verify_key_pair(private_key_path: &Path, public_key_path: &Path) -> anyhow::R
             public_key_path.display(),
             private_key_path.display()
         );
+    }
+
+    // Cannot perform symmetric checks. Abort here.
+    if force {
+        return Ok(());
     }
 
     let private_key =
