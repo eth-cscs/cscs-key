@@ -17,7 +17,7 @@ use std::fs::{File, metadata};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-
+use ssh_key::Certificate;
 use crate::completion::{CompletionArgs, generate_completion};
 use crate::config::Config;
 use crate::http;
