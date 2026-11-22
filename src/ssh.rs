@@ -448,8 +448,18 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     trace!("sign subcommand");
     trace!("{:?}", args);
 
-    let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
-    let public_key_path = PathBuf::from(format!("{}.pub", private_key_path.display()));
+    let key_name = args.file.clone().unwrap_or(config.key_path.clone());
+
+    // Handling, in case public file was given.
+    let (private_key_path, public_key_path) =
+        if key_name.extension().is_some_and(|e| e == "pub") {
+            let private = key_name.with_extension("");
+            (private, key_name)
+        } else {
+            let mut public = key_name.clone().into_os_string();
+            public.push(".pub");
+            (key_name, PathBuf::from(public))
+        };
 
     verify_key_pair(&private_key_path, &public_key_path, args.bypass_missing_priv_key)?;
 
