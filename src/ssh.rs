@@ -128,6 +128,7 @@ impl From<KeyDuration> for Duration {
     }
 }
 
+// INFO: Needed for Json Serde
 #[derive(Debug, Serialize)]
 struct SshKeyDuration {
     duration: KeyDuration,
@@ -140,6 +141,7 @@ struct PublicKey {
     duration: KeyDuration,
 }
 
+// INFO: Match internal call structure, populated homogenuously with --all
 #[derive(Debug, Serialize)]
 struct ListKeys {
     include_revoked: bool,
