@@ -285,7 +285,7 @@ fn verify_key_pair(private_key_path: &Path, public_key_path: &Path, force: bool)
         })?;
     let public_key_content = fs::read_to_string(public_key_path)
         .with_context(|| format!("Failed to read public key at {}", public_key_path.display()))?;
-    let public_key = ssh_key::PublicKey::from_openssh(&public_key_content).with_context(|| {
+    let public_key_derived = ssh_key::PublicKey::from_openssh(&public_key_content).with_context(|| {
         format!(
             "Failed to parse public key at {}",
             public_key_path.display()
@@ -293,7 +293,7 @@ fn verify_key_pair(private_key_path: &Path, public_key_path: &Path, force: bool)
     })?;
 
     if private_key.fingerprint(ssh_key::HashAlg::Sha256)
-        != public_key.fingerprint(ssh_key::HashAlg::Sha256)
+        != public_key_derived.fingerprint(ssh_key::HashAlg::Sha256)
     {
         bail!(
             "Public key at {} does not match private key at {}.\n\
