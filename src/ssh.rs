@@ -260,7 +260,8 @@ fn verify_key_pair(private_key_path: &Path, public_key_path: &Path) -> anyhow::R
     if !public_key_path.exists() {
         bail!(
             "Public key not found at {}.\n\
-            This key was likely generated server-side (via 'cscs-key gen' or the older SSH service tool) and should be replaced with a locally generated key pair.\n\
+            This key was likely generated server-side (via 'cscs-key gen' or the older SSH service \
+            tool) and should be replaced with a locally generated key pair.\n\
             Generate a new key pair with: ssh-keygen -t ed25519 -f {}",
             public_key_path.display(),
             private_key_path.display()
