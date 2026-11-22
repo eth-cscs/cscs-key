@@ -158,9 +158,9 @@ struct RevokeKey {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct SshKey {
-    #[serde(deserialize_with = "ensure_newline_string")]
+    #[serde(deserialize_with = "ensure_newline_deser")]
     public_key: String,
-    #[serde(deserialize_with = "ensure_newline_secretstring")]
+    #[serde(deserialize_with = "ensure_newline_deser")]
     private_key: SecretString,
     #[allow(dead_code)]
     expire_time: String,
@@ -175,7 +175,7 @@ struct SshserviceSuccessResponse {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct SshKeyCert {
-    #[serde(deserialize_with = "ensure_newline_string")]
+    #[serde(deserialize_with = "ensure_newline_deser")]
     public_key: String,
     expire_time: DateTime<Utc>,
     serial_number: String,
@@ -215,22 +215,14 @@ fn ensure_newline(mut s: String) -> String {
     s
 }
 
-fn ensure_newline_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+fn ensure_newline_deser<'de, D, S>(deserializer: D) -> Result<S, D::Error>
 where
     D: Deserializer<'de>,
+    S: From<String>,
 {
     let s = String::deserialize(deserializer)?;
-
-    Ok(ensure_newline(s))
-}
-
-fn ensure_newline_secretstring<'de, D>(deserializer: D) -> Result<SecretString, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-
-    Ok(SecretString::from(ensure_newline(s)))
+    let r = S::from(ensure_newline(s));
+    Ok(r)
 }
 
 fn redact_private_key(s: &str) -> String {
