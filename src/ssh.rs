@@ -248,7 +248,10 @@ pub fn run(command: &Commands, config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn verify_key_pair(private_key_path: &Path, public_key_path: &Path) -> anyhow::Result<()> {
+/// Add force to only check for the presence of the pulbic key.
+fn verify_key_pair(private_key_path: &Path, public_key_path: &Path, force: bool)
+    -> anyhow::Result<()> {
+
     if !private_key_path.exists() && !force{
         bail!(
             "Private key not found at {}.\nGenerate a new key pair with: ssh-keygen -t ed25519 -f {}",
