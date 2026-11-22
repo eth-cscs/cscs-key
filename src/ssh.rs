@@ -1,7 +1,7 @@
 use anyhow::{Context, anyhow, bail};
 use chrono::{DateTime, Duration, Local, Utc};
 use chrono_humanize::HumanTime;
-use clap::{Args, Subcommand, ValueEnum};
+use clap::{Args, Subcommand, ValueEnum, ArgAction};
 use comfy_table::Table;
 use comfy_table::modifiers::{UTF8_ROUND_CORNERS, UTF8_SOLID_INNER_BORDERS};
 use comfy_table::presets::{NOTHING, UTF8_FULL};
@@ -83,6 +83,22 @@ pub struct SignArgs {
         help = "Validity duration for the SSH key: '1d' (default) or '1min'"
     )]
     pub duration: Option<KeyDuration>,
+    #[arg(
+        short = 'b',
+        long,
+        help = "Ignore missing private keys and associated checks.",
+        default_value_t = false,
+        action = ArgAction::SetTrue,
+    )]
+    pub bypass_missing_priv_key: bool,
+    #[arg(
+        short = 'i',
+        long,
+        help = "Only sign expired keys.",
+        default_value_t = false,
+        action = ArgAction::SetTrue,
+    )]
+    pub if_expired: bool,
 }
 
 #[derive(Args, Debug)]
@@ -435,7 +451,7 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
     let public_key_path = PathBuf::from(format!("{}.pub", private_key_path.display()));
 
-    verify_key_pair(&private_key_path, &public_key_path, args.force)?;
+    verify_key_pair(&private_key_path, &public_key_path, args.bypass_missing_priv_key)?;
 
     debug!("Reading public key in {}", public_key_path.display());
     let content = fs::read_to_string(public_key_path)?;
