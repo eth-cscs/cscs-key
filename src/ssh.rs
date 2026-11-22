@@ -383,7 +383,7 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     let public_key_path = PathBuf::from(format!("{}-cert.pub", private_key_path.display()));
 
     if let Some(parent) = private_key_path.parent() {
-        std::fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent)?;
     }
 
     // if we're overwriting an existing private file, we should probably ask the user
