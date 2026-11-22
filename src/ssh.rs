@@ -459,14 +459,16 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     let key_name = args.file.clone().unwrap_or(config.key_path.clone());
 
     // Handling, in case public file was given.
-    let (private_key_path, public_key_path) =
+    let (private_key_path, public_key_path, cert_path) =
         if key_name.extension().is_some_and(|e| e == "pub") {
             let private = key_name.with_extension("");
-            (private, key_name)
+            let cert = private.with_extension("-cert.pub");
+            (private, key_name, cert)
         } else {
             let mut public = key_name.clone().into_os_string();
             public.push(".pub");
-            (key_name, PathBuf::from(public))
+            let cert = key_name.with_extension("-cert.pub");
+            (key_name, PathBuf::from(public), cert)
         };
 
     verify_key_pair(&private_key_path, &public_key_path, args.bypass_missing_priv_key)?;
@@ -511,17 +513,14 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
         })?;
     trace!("Parsed SSH service response: {:?}", response_struct);
 
-    let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
-    let cert_path = PathBuf::from(format!("{}-cert.pub", private_key_path.display()));
-
     if let Some(parent) = private_key_path.parent() {
         fs::create_dir_all(parent)?;
     }
 
     // Save cert
     debug!("Saving save cert in {}", cert_path.display());
-    let mut public_file = open_key_file(&cert_path, 0o644)?;
-    public_file.write_all(response_struct.ssh_key.public_key.as_bytes())?;
+    let mut cert_file = open_key_file(&cert_path, 0o644)?;
+    cert_file.write_all(response_struct.ssh_key.public_key.as_bytes())?;
     info!(
         "Public SSH certificate successfully downloaded to {}",
         cert_path.display()
