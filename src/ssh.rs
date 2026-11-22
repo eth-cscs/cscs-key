@@ -1,7 +1,7 @@
 use anyhow::{Context, anyhow, bail};
 use chrono::{DateTime, Duration, Local, Utc};
 use chrono_humanize::HumanTime;
-use clap::{Args, Subcommand, ValueEnum};
+use clap::{Args, Subcommand, ValueEnum, ArgAction};
 use comfy_table::Table;
 use comfy_table::modifiers::{UTF8_ROUND_CORNERS, UTF8_SOLID_INNER_BORDERS};
 use comfy_table::presets::{NOTHING, UTF8_FULL};
@@ -17,7 +17,7 @@ use std::fs::{File, metadata};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-
+use ssh_key::Certificate;
 use crate::completion::{CompletionArgs, generate_completion};
 use crate::config::Config;
 use crate::http;
@@ -83,6 +83,22 @@ pub struct SignArgs {
         help = "Validity duration for the SSH key: '1d' (default) or '1min'"
     )]
     pub duration: Option<KeyDuration>,
+    #[arg(
+        short = 'b',
+        long,
+        help = "Ignore missing private keys and associated checks.",
+        default_value_t = false,
+        action = ArgAction::SetTrue,
+    )]
+    pub bypass_missing_priv_key: bool,
+    #[arg(
+        short = 'i',
+        long,
+        help = "Only sign expired keys.",
+        default_value_t = false,
+        action = ArgAction::SetTrue,
+    )]
+    pub if_expired: bool,
 }
 
 #[derive(Args, Debug)]
@@ -128,6 +144,7 @@ impl From<KeyDuration> for Duration {
     }
 }
 
+// INFO: Needed for Json Serde
 #[derive(Debug, Serialize)]
 struct SshKeyDuration {
     duration: KeyDuration,
@@ -140,6 +157,7 @@ struct PublicKey {
     duration: KeyDuration,
 }
 
+// INFO: Match internal call structure, populated homogenuously with --all
 #[derive(Debug, Serialize)]
 struct ListKeys {
     include_revoked: bool,
@@ -156,9 +174,9 @@ struct RevokeKey {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct SshKey {
-    #[serde(deserialize_with = "ensure_newline_string")]
+    #[serde(deserialize_with = "ensure_newline_deser")]
     public_key: String,
-    #[serde(deserialize_with = "ensure_newline_secretstring")]
+    #[serde(deserialize_with = "ensure_newline_deser")]
     private_key: SecretString,
     #[allow(dead_code)]
     expire_time: String,
@@ -173,7 +191,7 @@ struct SshserviceSuccessResponse {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct SshKeyCert {
-    #[serde(deserialize_with = "ensure_newline_string")]
+    #[serde(deserialize_with = "ensure_newline_deser")]
     public_key: String,
     expire_time: DateTime<Utc>,
     serial_number: String,
@@ -213,22 +231,14 @@ fn ensure_newline(mut s: String) -> String {
     s
 }
 
-fn ensure_newline_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+fn ensure_newline_deser<'de, D, S>(deserializer: D) -> Result<S, D::Error>
 where
     D: Deserializer<'de>,
+    S: From<String>,
 {
     let s = String::deserialize(deserializer)?;
-
-    Ok(ensure_newline(s))
-}
-
-fn ensure_newline_secretstring<'de, D>(deserializer: D) -> Result<SecretString, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-
-    Ok(SecretString::from(ensure_newline(s)))
+    let r = S::from(ensure_newline(s));
+    Ok(r)
 }
 
 fn redact_private_key(s: &str) -> String {
@@ -254,8 +264,12 @@ pub fn run(command: &Commands, config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn verify_key_pair(private_key_path: &Path, public_key_path: &Path) -> anyhow::Result<()> {
-    if !private_key_path.exists() {
+/// Add force to only check for the presence of the public key.
+/// Return fingerprint of key
+fn verify_key_pair(private_key_path: &Path, public_key_path: &Path, force: bool)
+    -> anyhow::Result<ssh_key::Fingerprint> {
+
+    if !private_key_path.exists() && !force{
         bail!(
             "Private key not found at {}.\nGenerate a new key pair with: ssh-keygen -t ed25519 -f {}",
             private_key_path.display(),
@@ -266,11 +280,24 @@ fn verify_key_pair(private_key_path: &Path, public_key_path: &Path) -> anyhow::R
     if !public_key_path.exists() {
         bail!(
             "Public key not found at {}.\n\
-            This key was likely generated server-side (via 'cscs-key gen' or the older SSH service tool) and should be replaced with a locally generated key pair.\n\
+            This key was likely generated server-side (via 'cscs-key gen' or the older SSH service \
+            tool) and should be replaced with a locally generated key pair.\n\
             Generate a new key pair with: ssh-keygen -t ed25519 -f {}",
             public_key_path.display(),
             private_key_path.display()
         );
+    }
+
+    // Cannot perform symmetric checks. Check pub is valid and compute fingerprint.
+    if force {
+        let public_key = ssh_key::PublicKey::read_openssh_file(&public_key_path).with_context(|| {
+            format!(
+                "Failed to read public key at {}",
+                private_key_path.display()
+            )
+        })?;
+
+        return Ok(public_key.fingerprint(ssh_key::HashAlg::Sha256));
     }
 
     let private_key =
@@ -282,15 +309,15 @@ fn verify_key_pair(private_key_path: &Path, public_key_path: &Path) -> anyhow::R
         })?;
     let public_key_content = fs::read_to_string(public_key_path)
         .with_context(|| format!("Failed to read public key at {}", public_key_path.display()))?;
-    let public_key = ssh_key::PublicKey::from_openssh(&public_key_content).with_context(|| {
+    let public_key_derived = ssh_key::PublicKey::from_openssh(&public_key_content).with_context(|| {
         format!(
             "Failed to parse public key at {}",
             public_key_path.display()
         )
     })?;
 
-    if private_key.fingerprint(ssh_key::HashAlg::Sha256)
-        != public_key.fingerprint(ssh_key::HashAlg::Sha256)
+    let private_key_fingerprint = private_key.fingerprint(ssh_key::HashAlg::Sha256);
+    if private_key_fingerprint != public_key_derived.fingerprint(ssh_key::HashAlg::Sha256)
     {
         bail!(
             "Public key at {} does not match private key at {}.\n\
@@ -301,7 +328,7 @@ fn verify_key_pair(private_key_path: &Path, public_key_path: &Path) -> anyhow::R
         );
     }
 
-    Ok(())
+    Ok(private_key_fingerprint)
 }
 
 /// Open a key file for writing, refusing to follow symlinks on Unix and
@@ -380,7 +407,7 @@ fn download_key(config: &Config, args: &GenArgs) -> anyhow::Result<()> {
     let public_key_path = PathBuf::from(format!("{}-cert.pub", private_key_path.display()));
 
     if let Some(parent) = private_key_path.parent() {
-        std::fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent)?;
     }
 
     // if we're overwriting an existing private file, we should probably ask the user
@@ -429,10 +456,38 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     trace!("sign subcommand");
     trace!("{:?}", args);
 
-    let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
-    let public_key_path = PathBuf::from(format!("{}.pub", private_key_path.display()));
+    let key_name = args.file.clone().unwrap_or(config.key_path.clone());
 
-    verify_key_pair(&private_key_path, &public_key_path)?;
+    // Handling, in case public file was given.
+    let (private_key_path, public_key_path, cert_path) =
+        if key_name.extension().is_some_and(|e| e == "pub") {
+            let private = key_name.with_extension("");
+            let cert = private.with_extension("-cert.pub");
+            (private, key_name, cert)
+        } else {
+            let mut public = key_name.clone().into_os_string();
+            public.push(".pub");
+            let cert = key_name.with_extension("-cert.pub");
+            (key_name, PathBuf::from(public), cert)
+        };
+
+    let fp = verify_key_pair(&private_key_path, &public_key_path, args.bypass_missing_priv_key)?;
+
+    if args.if_expired {
+        let keys = list_keys_internal(&config, true)?;
+        let now: DateTime<Utc> = Utc::now();
+        for key in keys {
+            let inner_fingerprint = Certificate::from_openssh(&key.public_key)?
+                .public_key()
+                .fingerprint(ssh_key::HashAlg::Sha256);
+
+            // Abort condition. fingerprint matches and not expired.
+            if inner_fingerprint == fp && now <= key.expire_time {
+                info!("SSH Key with fingerprint {fp} is still valid. Skipping...");
+                return Ok(());
+            }
+        }
+    }
 
     debug!("Reading public key in {}", public_key_path.display());
     let content = fs::read_to_string(public_key_path)?;
@@ -474,20 +529,17 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
         })?;
     trace!("Parsed SSH service response: {:?}", response_struct);
 
-    let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
-    let public_key_path = PathBuf::from(format!("{}-cert.pub", private_key_path.display()));
-
     if let Some(parent) = private_key_path.parent() {
-        std::fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent)?;
     }
 
-    // Save public key
-    debug!("Saving public key in {}", public_key_path.display());
-    let mut public_file = open_key_file(&public_key_path, 0o644)?;
-    public_file.write_all(response_struct.ssh_key.public_key.as_bytes())?;
+    // Save cert
+    debug!("Saving save cert in {}", cert_path.display());
+    let mut cert_file = open_key_file(&cert_path, 0o644)?;
+    cert_file.write_all(response_struct.ssh_key.public_key.as_bytes())?;
     info!(
         "Public SSH certificate successfully downloaded to {}",
-        public_key_path.display()
+        cert_path.display()
     );
 
     Ok(())
