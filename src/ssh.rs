@@ -494,19 +494,19 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
     trace!("Parsed SSH service response: {:?}", response_struct);
 
     let private_key_path = args.file.clone().unwrap_or(config.key_path.clone());
-    let public_key_path = PathBuf::from(format!("{}-cert.pub", private_key_path.display()));
+    let cert_path = PathBuf::from(format!("{}-cert.pub", private_key_path.display()));
 
     if let Some(parent) = private_key_path.parent() {
-        std::fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent)?;
     }
 
-    // Save public key
-    debug!("Saving public key in {}", public_key_path.display());
-    let mut public_file = open_key_file(&public_key_path, 0o644)?;
+    // Save cert
+    debug!("Saving save cert in {}", cert_path.display());
+    let mut public_file = open_key_file(&cert_path, 0o644)?;
     public_file.write_all(response_struct.ssh_key.public_key.as_bytes())?;
     info!(
         "Public SSH certificate successfully downloaded to {}",
-        public_key_path.display()
+        cert_path.display()
     );
 
     Ok(())
