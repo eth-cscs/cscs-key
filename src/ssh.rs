@@ -471,7 +471,23 @@ fn sign_key(config: &Config, args: &SignArgs) -> anyhow::Result<()> {
             (key_name, PathBuf::from(public), cert)
         };
 
-    verify_key_pair(&private_key_path, &public_key_path, args.bypass_missing_priv_key)?;
+    let fp = verify_key_pair(&private_key_path, &public_key_path, args.bypass_missing_priv_key)?;
+
+    if args.if_expired {
+        let keys = list_keys_internal(&config, true)?;
+        let now: DateTime<Utc> = Utc::now();
+        for key in keys {
+            let inner_fingerprint = Certificate::from_openssh(&key.public_key)?
+                .public_key()
+                .fingerprint(ssh_key::HashAlg::Sha256);
+
+            // Abort condition. fingerprint matches and not expired.
+            if inner_fingerprint == fp && now <= key.expire_time {
+                info!("SSH Key with fingerprint {fp} is still valid. Skipping...");
+                return Ok(());
+            }
+        }
+    }
 
     debug!("Reading public key in {}", public_key_path.display());
     let content = fs::read_to_string(public_key_path)?;
