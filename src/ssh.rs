@@ -264,9 +264,10 @@ pub fn run(command: &Commands, config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Add force to only check for the presence of the pulbic key.
+/// Add force to only check for the presence of the public key.
+/// Return fingerprint of key
 fn verify_key_pair(private_key_path: &Path, public_key_path: &Path, force: bool)
-    -> anyhow::Result<()> {
+    -> anyhow::Result<ssh_key::Fingerprint> {
 
     if !private_key_path.exists() && !force{
         bail!(
@@ -287,9 +288,16 @@ fn verify_key_pair(private_key_path: &Path, public_key_path: &Path, force: bool)
         );
     }
 
-    // Cannot perform symmetric checks. Abort here.
+    // Cannot perform symmetric checks. Check pub is valid and compute fingerprint.
     if force {
-        return Ok(());
+        let public_key = ssh_key::PublicKey::read_openssh_file(&public_key_path).with_context(|| {
+            format!(
+                "Failed to read public key at {}",
+                private_key_path.display()
+            )
+        })?;
+
+        return Ok(public_key.fingerprint(ssh_key::HashAlg::Sha256));
     }
 
     let private_key =
@@ -308,8 +316,8 @@ fn verify_key_pair(private_key_path: &Path, public_key_path: &Path, force: bool)
         )
     })?;
 
-    if private_key.fingerprint(ssh_key::HashAlg::Sha256)
-        != public_key_derived.fingerprint(ssh_key::HashAlg::Sha256)
+    let private_key_fingerprint = private_key.fingerprint(ssh_key::HashAlg::Sha256);
+    if private_key_fingerprint != public_key_derived.fingerprint(ssh_key::HashAlg::Sha256)
     {
         bail!(
             "Public key at {} does not match private key at {}.\n\
@@ -320,7 +328,7 @@ fn verify_key_pair(private_key_path: &Path, public_key_path: &Path, force: bool)
         );
     }
 
-    Ok(())
+    Ok(private_key_fingerprint)
 }
 
 /// Open a key file for writing, refusing to follow symlinks on Unix and
